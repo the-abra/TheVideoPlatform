@@ -1,0 +1,41 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build/cache
+*.o
+*.a
+*.swp
+*~
+._*
+!_*
+.DS_Store
+.go
+.vscode
+.idea
+
+# Environment specific files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Storage directory (for uploaded files)
+/storage/*
+
+# Tools
+tools/
+
+# Test files
+test.txt
+*.test
