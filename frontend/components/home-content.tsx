@@ -130,18 +130,26 @@ export function HomeContent() {
                   )}
                 </div>
               ) : (
-                filteredContent.map((item) => (
-                  <MediaCard
-                    key={`${item.id}-${item.title}`}
-                    id={item.id}
-                    thumbnail={item.thumbnail}
-                    title={item.title}
-                    creator={item.creator}
-                    duration={item.duration}
-                    views={item.views}
-                    uploadedAt={item.uploadedAt}
-                    verified={item.verified}
-                  />
+                filteredContent.map((item, index) => (
+                  <div key={`${item.id}-${item.title}-wrapper`} className="contents">
+                    <MediaCard
+                      key={`${item.id}-${item.title}`}
+                      id={item.id}
+                      thumbnail={item.thumbnail}
+                      title={item.title}
+                      creator={item.creator}
+                      duration={item.duration}
+                      views={item.views}
+                      uploadedAt={item.uploadedAt}
+                      verified={item.verified}
+                    />
+                    {/* Show random ad after every 4th video */}
+                    {(index + 1) % 4 === 0 && index < filteredContent.length - 1 && (
+                      <div className="col-span-1">
+                        <AdSection placement="video-random" maxAds={1} />
+                      </div>
+                    )}
+                  </div>
                 ))
               )}
             </div>

@@ -7,7 +7,7 @@ import { ExternalLink } from "lucide-react"
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 
 // Ad placement types
-type AdPlacement = "home-banner" | "home-sidebar" | "video-top" | "video-sidebar"
+type AdPlacement = "home-banner" | "home-sidebar" | "video-top" | "video-sidebar" | "video-random"
 
 // Ad interface matching backend response
 interface Ad {

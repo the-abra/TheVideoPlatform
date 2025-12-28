@@ -254,3 +254,99 @@ func (r *FileRepository) DeleteFolder(id int) error {
 	_, err = r.db.Exec(`DELETE FROM folders WHERE id = ?`, id)
 	return err
 }
+
+// FileShare operations - persistent share links
+
+// CreateFileShare creates a new share link for a file path
+func (r *FileRepository) CreateFileShare(token, filePath string, expiresAt *time.Time, maxDownloads *int) error {
+	_, err := r.db.Exec(
+		`INSERT INTO file_shares (token, file_path, expires_at, max_downloads, downloads, created_at)
+		 VALUES (?, ?, ?, ?, 0, ?)`,
+		token, filePath, expiresAt, maxDownloads, time.Now(),
+	)
+	return err
+}
+
+// GetFileShareByToken retrieves a share by its token
+func (r *FileRepository) GetFileShareByToken(token string) (*FileShare, string, error) {
+	share := &FileShare{}
+	var filePath string
+	var expiresAt sql.NullTime
+	var maxDownloads sql.NullInt64
+
+	err := r.db.QueryRow(
+		`SELECT id, token, file_path, expires_at, max_downloads, downloads, created_at
+		 FROM file_shares WHERE token = ?`, token,
+	).Scan(&share.ID, &share.Token, &filePath, &expiresAt, &maxDownloads, &share.Downloads, &share.CreatedAt)
+
+	if err != nil {
+		return nil, "", err
+	}
+
+	if expiresAt.Valid {
+		share.ExpiresAt = &expiresAt.Time
+	}
+	if maxDownloads.Valid {
+		md := int(maxDownloads.Int64)
+		share.MaxDownloads = &md
+	}
+
+	return share, filePath, nil
+}
+
+// GetFileShareByPath retrieves a share by file path (to check if already shared)
+func (r *FileRepository) GetFileShareByPath(filePath string) (*FileShare, error) {
+	share := &FileShare{}
+	var expiresAt sql.NullTime
+	var maxDownloads sql.NullInt64
+
+	err := r.db.QueryRow(
+		`SELECT id, token, expires_at, max_downloads, downloads, created_at
+		 FROM file_shares WHERE file_path = ? ORDER BY created_at DESC LIMIT 1`, filePath,
+	).Scan(&share.ID, &share.Token, &expiresAt, &maxDownloads, &share.Downloads, &share.CreatedAt)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if expiresAt.Valid {
+		share.ExpiresAt = &expiresAt.Time
+	}
+	if maxDownloads.Valid {
+		md := int(maxDownloads.Int64)
+		share.MaxDownloads = &md
+	}
+
+	return share, nil
+}
+
+// IncrementShareDownloads increments the download count for a share
+func (r *FileRepository) IncrementShareDownloads(token string) error {
+	_, err := r.db.Exec(
+		`UPDATE file_shares SET downloads = downloads + 1 WHERE token = ?`, token,
+	)
+	return err
+}
+
+// DeleteFileShare deletes a share by token
+func (r *FileRepository) DeleteFileShare(token string) error {
+	_, err := r.db.Exec(`DELETE FROM file_shares WHERE token = ?`, token)
+	return err
+}
+
+// DeleteFileShareByPath deletes all shares for a file path
+func (r *FileRepository) DeleteFileShareByPath(filePath string) error {
+	_, err := r.db.Exec(`DELETE FROM file_shares WHERE file_path = ?`, filePath)
+	return err
+}
+
+// CleanupExpiredShares removes expired share links
+func (r *FileRepository) CleanupExpiredShares() (int64, error) {
+	result, err := r.db.Exec(
+		`DELETE FROM file_shares WHERE expires_at IS NOT NULL AND expires_at < ?`, time.Now(),
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}

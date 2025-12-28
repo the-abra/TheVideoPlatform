@@ -27,9 +27,18 @@ func (h *CategoryHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Filter out "folder" category from public API response
+	filtered := make([]models.Category, 0, len(categories))
+	for _, cat := range categories {
+		name := strings.ToLower(strings.TrimSpace(cat.Name))
+		if name != "folder" && name != "folders" {
+			filtered = append(filtered, cat)
+		}
+	}
+
 	models.RespondSuccess(w, "", map[string]interface{}{
-		"categories": categories,
-		"total":      len(categories),
+		"categories": filtered,
+		"total":      len(filtered),
 	}, http.StatusOK)
 }
 

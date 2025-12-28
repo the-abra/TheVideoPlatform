@@ -20,14 +20,33 @@ export default function CategoriesPage() {
         const response = await fetch('/api/categories')
         if (response.ok) {
           const data = await response.json()
-          setCategories(data.data.categories || [])
+          // Filter out "folder" category from client display
+          const filteredCategories = (data.data.categories || []).filter(
+            (cat: Category) => {
+              const name = cat.name.toLowerCase().trim()
+              return name !== 'folder' && name !== 'folders'
+            }
+          )
+          setCategories(filteredCategories)
         } else {
           // Fallback to localStorage if API fails
-          setCategories(storage.getCategories())
+          const filteredCategories = storage.getCategories().filter(
+            (cat) => {
+              const name = cat.name.toLowerCase().trim()
+              return name !== 'folder' && name !== 'folders'
+            }
+          )
+          setCategories(filteredCategories)
         }
       } catch (error) {
         // Fallback to localStorage if API fails
-        setCategories(storage.getCategories())
+        const filteredCategories = storage.getCategories().filter(
+          (cat) => {
+            const name = cat.name.toLowerCase().trim()
+            return name !== 'folder' && name !== 'folders'
+          }
+        )
+        setCategories(filteredCategories)
       } finally {
         setIsLoading(false)
       }

@@ -71,6 +71,7 @@ func main() {
 	serverHandler := handlers.NewServerHandler(serverService, serverLogRepo)
 	fileHandler := handlers.NewFileHandler(fileRepo, fileService)
 	terminalHandler := handlers.NewTerminalHandler()
+	securityHandler := handlers.NewSecurityHandler()
 
 	// Create router
 	r := chi.NewRouter()
@@ -127,6 +128,9 @@ func main() {
 
 		// Public settings routes
 		r.Get("/settings", settingsHandler.Get)
+
+		// Public security routes
+		r.Get("/check-vpn", securityHandler.CheckVPN)
 
 		// Public file sharing routes
 		fileHandler.RegisterPublicRoutes(r)

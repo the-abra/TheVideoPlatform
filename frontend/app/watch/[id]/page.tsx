@@ -7,6 +7,7 @@ import { Toast } from "@/components/toast"
 import { LoadingSpinner } from "@/components/loading-spinner"
 import { storage } from "@/lib/storage"
 import { AdSection } from "@/components/ad-section"
+import { VideoPlayer } from "@/components/video-player"
 
 const API_BASE = "http://localhost:5000"
 
@@ -183,13 +184,11 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
                 </div>
               </div>
             ) : (
-              <video
+              <VideoPlayer
                 src={videoData.url}
-                controls
-                className="w-full h-full bg-black"
-                controlsList="nodownload"
+                poster={videoData.thumbnail}
                 onError={() => setVideoError(true)}
-                preload="metadata"
+                className="w-full h-full"
               />
             )}
           </div>
@@ -297,8 +296,8 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
               </div>
             )}
 
-            {/* Sidebar Ads - visible on larger screens */}
-            <div className="hidden lg:block mt-6">
+            {/* Sidebar Ads - visible on all screens */}
+            <div className="mt-6">
               <AdSection placement="video-sidebar" maxAds={2} />
             </div>
           </div>

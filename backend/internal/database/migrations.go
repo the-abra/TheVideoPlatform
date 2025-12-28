@@ -47,7 +47,7 @@ func RunMigrations(db *sql.DB) error {
 			title TEXT NOT NULL,
 			image_url TEXT NOT NULL,
 			target_url TEXT NOT NULL,
-			placement TEXT NOT NULL CHECK(placement IN ('home-banner', 'home-sidebar', 'video-top', 'video-sidebar')),
+			placement TEXT NOT NULL CHECK(placement IN ('home-banner', 'home-sidebar', 'video-top', 'video-sidebar', 'video-random')),
 			enabled INTEGER DEFAULT 1,
 			clicks INTEGER DEFAULT 0,
 			impressions INTEGER DEFAULT 0,
@@ -128,6 +128,19 @@ func RunMigrations(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_files_folder ON files(folder_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_files_share_token ON files(share_token)`,
 		`CREATE INDEX IF NOT EXISTS idx_files_created ON files(created_at DESC)`,
+
+		// File shares table (for persistent share links)
+		`CREATE TABLE IF NOT EXISTS file_shares (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			token TEXT NOT NULL UNIQUE,
+			file_path TEXT NOT NULL,
+			expires_at DATETIME,
+			max_downloads INTEGER,
+			downloads INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_shares_token ON file_shares(token)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_shares_path ON file_shares(file_path)`,
 	}
 
 	for _, migration := range migrations {
