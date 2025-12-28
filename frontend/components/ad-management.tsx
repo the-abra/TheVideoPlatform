@@ -4,7 +4,12 @@ import type React from "react"
 import { useState, useEffect, useCallback } from "react"
 import { Plus, Trash2, Eye, EyeOff, ExternalLink, Edit2, X, ImageIcon, BarChart2, FolderOpen, VideoIcon, Home, ChevronRight, File } from "lucide-react"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+const getApiBase = () => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.hostname}:5000`;
+  }
+  return "";
+};
 
 // Drive file/folder types
 interface DriveFile {
@@ -105,12 +110,31 @@ export function AdManagement({ onToast }: AdManagementProps) {
   // Get image URL with API base
   const getImageUrl = (imageUrl: string): string => {
     if (!imageUrl) return "/placeholder.svg"
+
+    // Fix old localhost URLs to relative paths
+    if (imageUrl.includes('/share/') && (imageUrl.includes('localhost') || imageUrl.includes('127.0.0.1'))) {
+      const match = imageUrl.match(/\/share\/[^/]+\/raw/)
+      if (match) return match[0]
+    }
+
     if (imageUrl.startsWith("http")) return imageUrl
+    // Handle share links (relative to frontend)
+    if (imageUrl.startsWith("/share/")) {
+      return imageUrl
+    }
+    const API_BASE = getApiBase();
+    if (!API_BASE) return "/placeholder.svg";
     return `${API_BASE}${imageUrl}`
   }
 
   // Fetch all ads
   const fetchAds = useCallback(async () => {
+    const API_BASE = getApiBase();
+    if (!API_BASE) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true)
       const response = await fetch(`${API_BASE}/api/ads`)
@@ -133,6 +157,9 @@ export function AdManagement({ onToast }: AdManagementProps) {
 
   // Fetch ad stats
   const fetchStats = useCallback(async () => {
+    const API_BASE = getApiBase();
+    if (!API_BASE) return;
+
     try {
       const response = await fetch(`${API_BASE}/api/ads/stats`)
 
@@ -171,6 +198,12 @@ export function AdManagement({ onToast }: AdManagementProps) {
   // File picker functions
   const loadFilePickerFiles = async (folderPath: string | null) => {
     setFilePickerLoading(true)
+    const API_BASE = getApiBase();
+    if (!API_BASE) {
+      setFilePickerLoading(false);
+      return;
+    }
+
     try {
       const token = getToken()
       const url = folderPath
@@ -215,6 +248,12 @@ export function AdManagement({ onToast }: AdManagementProps) {
   }
 
   const selectFileFromPicker = async (file: DriveFile) => {
+    const API_BASE = getApiBase();
+    if (!API_BASE) {
+      showToast('Failed to select file', 'error');
+      return;
+    }
+
     try {
       const token = getToken()
 
@@ -231,12 +270,13 @@ export function AdManagement({ onToast }: AdManagementProps) {
       if (response.ok) {
         const data = await response.json()
         const shareToken = data.data?.shareToken || data.shareToken
-        const shareUrl = `${window.location.origin}/share/${shareToken}/raw`
+        // Store relative path so it works from any origin (PC or phone)
+        const shareUrl = `/share/${shareToken}/raw`
 
         setFormData(prev => ({
           ...prev,
           imageUrl: shareUrl,
-          imagePreview: shareUrl,
+          imagePreview: `${window.location.origin}${shareUrl}`, // Use full URL for preview only
           imageFile: null
         }))
         showToast('File selected from drive', 'success')
@@ -299,6 +339,12 @@ export function AdManagement({ onToast }: AdManagementProps) {
       return
     }
 
+    const API_BASE = getApiBase();
+    if (!API_BASE) {
+      showToast("Failed to connect to server", "error");
+      return;
+    }
+
     try {
       setSubmitting(true)
       const token = getToken()
@@ -349,6 +395,12 @@ export function AdManagement({ onToast }: AdManagementProps) {
       return
     }
 
+    const API_BASE = getApiBase();
+    if (!API_BASE) {
+      showToast("Failed to connect to server", "error");
+      return;
+    }
+
     try {
       setSubmitting(true)
       const token = getToken()
@@ -392,6 +444,12 @@ export function AdManagement({ onToast }: AdManagementProps) {
 
   // Toggle ad enabled status
   const handleToggle = async (ad: Ad) => {
+    const API_BASE = getApiBase();
+    if (!API_BASE) {
+      showToast("Failed to connect to server", "error");
+      return;
+    }
+
     try {
       const token = getToken()
 
@@ -418,6 +476,12 @@ export function AdManagement({ onToast }: AdManagementProps) {
   const handleDelete = async (ad: Ad) => {
     if (!window.confirm(`Are you sure you want to delete "${ad.title}"?`)) {
       return
+    }
+
+    const API_BASE = getApiBase();
+    if (!API_BASE) {
+      showToast("Failed to connect to server", "error");
+      return;
     }
 
     try {

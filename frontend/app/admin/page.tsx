@@ -48,24 +48,15 @@ import { useRouter } from "next/navigation"
 // Determine API and WebSocket bases based on the current location for better environment compatibility
 const getApiBase = () => {
   if (typeof window !== 'undefined') {
-    const protocol = window.location.protocol;
-    const host = window.location.host;
-    // For development, default to localhost:5000, but allow override
-    return process.env.NEXT_PUBLIC_API_BASE || `${protocol}//${host.includes('3000') ? 'localhost:5000' : host}`;
+    return `${window.location.protocol}//${window.location.hostname}:5000`;
   }
-  return "http://localhost:5000";
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 };
 
 const getWsBase = () => {
   if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    const port = window.location.port;
-    // For development, default to localhost:5000, but allow override
-    if (process.env.NEXT_PUBLIC_WS_BASE) {
-      return process.env.NEXT_PUBLIC_WS_BASE;
-    }
-    // If frontend is running on a different port, use localhost:5000 for backend
-    return port === '5000' ? `ws://${hostname}:${port}` : 'ws://localhost:5000';
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.hostname}:5000`;
   }
   return "ws://localhost:5000";
 };

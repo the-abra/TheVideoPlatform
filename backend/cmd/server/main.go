@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -80,11 +79,14 @@ func main() {
 	r.Use(middleware.Recovery)
 	r.Use(middleware.Logger)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   strings.Split(config.AllowedOrigins, ","),
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowOriginFunc: func(r *http.Request, origin string) bool {
+			// Allow all origins for development
+			return true
+		},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Requested-With"},
 		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 		MaxAge:           300,
 	}))
 
@@ -180,8 +182,9 @@ func main() {
 	serverService.Log("info", "Server starting on port "+config.Port, "main")
 
 	// Start server
-	addr := ":" + config.Port
-	log.Printf("Server starting on http://localhost%s", addr)
+	addr := "0.0.0.0:" + config.Port
+	log.Printf("Server starting on http://0.0.0.0:%s", config.Port)
+	log.Printf("Server accessible at http://<your-ip>:%s", config.Port)
 	log.Printf("Environment: %s", config.Env)
 	log.Printf("Database: %s", config.DatabasePath)
 	log.Printf("Admin user: %s", config.DefaultAdminUser)

@@ -11,7 +11,12 @@ interface SharedFile {
   downloads: number
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+const getApiBase = () => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.hostname}:5000`;
+  }
+  return "";
+};
 
 export default function SharePage() {
   const params = useParams()
@@ -27,6 +32,13 @@ export default function SharePage() {
 
   useEffect(() => {
     const fetchFileInfo = async () => {
+      const API_URL = getApiBase();
+      if (!API_URL) {
+        setError("Failed to connect to server");
+        setLoading(false);
+        return;
+      }
+
       try {
         const response = await fetch(`${API_URL}/api/share/${token}`)
         const data = await response.json()
@@ -49,6 +61,12 @@ export default function SharePage() {
   }, [token])
 
   const handleDownload = async () => {
+    const API_URL = getApiBase();
+    if (!API_URL) {
+      setError("Failed to connect to server");
+      return;
+    }
+
     setDownloading(true)
     try {
       const response = await fetch(`${API_URL}/api/share/${token}/download`)

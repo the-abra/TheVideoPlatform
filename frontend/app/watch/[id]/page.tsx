@@ -8,8 +8,14 @@ import { LoadingSpinner } from "@/components/loading-spinner"
 import { storage } from "@/lib/storage"
 import { AdSection } from "@/components/ad-section"
 import { VideoPlayer } from "@/components/video-player"
+import { fixVideoUrl, fixThumbnailUrl } from "@/lib/url-utils"
 
-const API_BASE = "http://localhost:5000"
+const getApiBase = () => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.hostname}:5000`;
+  }
+  return "";
+};
 
 export default function WatchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -33,6 +39,12 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
 
     // Fetch video from backend API
     const fetchVideo = async () => {
+      const API_BASE = getApiBase();
+      if (!API_BASE) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
         const response = await fetch(`${API_BASE}/api/videos/${videoId}`)
         if (response.ok) {
@@ -135,9 +147,41 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
     }
   }
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(window.location.href)
-    showToast("Link copied to clipboard", "success")
+  const copyToClipboard = async () => {
+    const url = window.location.href
+
+    try {
+      // Try modern Clipboard API (requires HTTPS or localhost)
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url)
+        showToast("Link copied to clipboard", "success")
+      } else {
+        // Fallback for non-HTTPS contexts
+        const textArea = document.createElement("textarea")
+        textArea.value = url
+        textArea.style.position = "fixed"
+        textArea.style.left = "-999999px"
+        document.body.appendChild(textArea)
+        textArea.focus()
+        textArea.select()
+
+        try {
+          const successful = document.execCommand('copy')
+          if (successful) {
+            showToast("Link copied to clipboard", "success")
+          } else {
+            showToast("Could not copy link. Please copy manually: " + url, "error")
+          }
+        } catch (err) {
+          showToast("Could not copy link. Please copy manually.", "error")
+        }
+
+        document.body.removeChild(textArea)
+      }
+    } catch (err) {
+      console.error("Failed to copy:", err)
+      showToast("Could not copy link. Please copy manually.", "error")
+    }
   }
 
   if (isLoading) {
@@ -185,8 +229,8 @@ export default function WatchPage({ params }: { params: Promise<{ id: string }> 
               </div>
             ) : (
               <VideoPlayer
-                src={videoData.url}
-                poster={videoData.thumbnail}
+                src={fixVideoUrl(videoData.url)}
+                poster={fixThumbnailUrl(videoData.thumbnail)}
                 onError={() => setVideoError(true)}
                 className="w-full h-full"
               />

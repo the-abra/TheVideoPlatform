@@ -3,7 +3,12 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { Play, Volume2, VolumeX, Maximize, Pause, SkipForward } from "lucide-react"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+const getApiBase = () => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.hostname}:5000`;
+  }
+  return "";
+};
 
 interface Ad {
   id: string
@@ -44,6 +49,12 @@ export function VideoPlayer({ src, poster, onError, className = "" }: VideoPlaye
   // Fetch pre-roll ad
   useEffect(() => {
     const fetchPrerollAd = async () => {
+      const API_BASE = getApiBase();
+      if (!API_BASE) {
+        setAdLoading(false);
+        return;
+      }
+
       try {
         // Fetch ads from video-top or video-random placement for pre-roll
         const response = await fetch(`${API_BASE}/api/ads?placement=video-top&enabled=true`)
@@ -80,6 +91,9 @@ export function VideoPlayer({ src, poster, onError, className = "" }: VideoPlaye
 
   // Track ad impression
   const trackAdImpression = useCallback(async (adId: string) => {
+    const API_BASE = getApiBase();
+    if (!API_BASE) return;
+
     try {
       await fetch(`${API_BASE}/api/ads/${adId}/impression`, { method: "POST" })
     } catch (err) {
@@ -89,6 +103,9 @@ export function VideoPlayer({ src, poster, onError, className = "" }: VideoPlaye
 
   // Track ad click
   const trackAdClick = useCallback(async (adId: string) => {
+    const API_BASE = getApiBase();
+    if (!API_BASE) return;
+
     try {
       await fetch(`${API_BASE}/api/ads/${adId}/click`, { method: "POST" })
     } catch (err) {
@@ -137,6 +154,8 @@ export function VideoPlayer({ src, poster, onError, className = "" }: VideoPlaye
   const getMediaUrl = (url: string): string => {
     if (!url) return ""
     if (url.startsWith("http")) return url
+    const API_BASE = getApiBase();
+    if (!API_BASE) return "";
     return `${API_BASE}${url}`
   }
 

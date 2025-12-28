@@ -31,7 +31,7 @@ func LoadConfig() *Config {
 		DatabasePath:     getEnv("DATABASE_PATH", "./titan.db"),
 		JWTSecret:        getEnv("JWT_SECRET", "default-secret-change-me"),
 		JWTExpiryHours:   getEnvAsInt("JWT_EXPIRY_HOURS", 24),
-		AllowedOrigins:   getEnv("ALLOWED_ORIGINS", "http://localhost:3000"),
+		AllowedOrigins:   getEnv("ALLOWED_ORIGINS", "*"),
 		MaxVideoSizeMB:   getEnvAsInt("MAX_VIDEO_SIZE_MB", 2048),
 		MaxImageSizeMB:   getEnvAsInt("MAX_IMAGE_SIZE_MB", 5),
 		StoragePath:      getEnv("STORAGE_PATH", "./storage"),

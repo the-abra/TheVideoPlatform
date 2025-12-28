@@ -4,7 +4,12 @@ import type React from "react"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { ExternalLink } from "lucide-react"
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+const getApiBase = () => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.hostname}:5000`;
+  }
+  return "";
+};
 
 // Ad placement types
 type AdPlacement = "home-banner" | "home-sidebar" | "video-top" | "video-sidebar" | "video-random"
@@ -37,11 +42,20 @@ export function AdSection({ placement, className = "", maxAds = 3 }: AdSectionPr
 
   // Fetch ads from backend
   const fetchAds = useCallback(async () => {
+    const API_BASE = getApiBase();
+    if (!API_BASE) return; // Skip if not on client side
+
+    console.log('[AdSection] Fetching from:', `${API_BASE}/api/ads?placement=${placement}&enabled=true`);
+
     try {
       setLoading(true)
       setError(null)
 
-      const response = await fetch(`${API_BASE}/api/ads?placement=${placement}&enabled=true`)
+      const response = await fetch(`${API_BASE}/api/ads?placement=${placement}&enabled=true`, {
+        headers: {
+          'Accept': 'application/json',
+        },
+      })
 
       if (!response.ok) {
         throw new Error(`Failed to fetch ads: ${response.statusText}`)
@@ -57,7 +71,8 @@ export function AdSection({ placement, className = "", maxAds = 3 }: AdSectionPr
         setAds([])
       }
     } catch (err) {
-      console.error("Error fetching ads:", err)
+      console.error("[AdSection] Error fetching ads:", err)
+      console.error("[AdSection] API_BASE was:", API_BASE)
       setError(err instanceof Error ? err.message : "Failed to load ads")
       setAds([])
     } finally {
@@ -71,6 +86,9 @@ export function AdSection({ placement, className = "", maxAds = 3 }: AdSectionPr
     if (impressionTracked.current.has(adId)) return
     impressionTracked.current.add(adId)
 
+    const API_BASE = getApiBase();
+    if (!API_BASE) return;
+
     try {
       await fetch(`${API_BASE}/api/ads/${adId}/impression`, {
         method: "POST",
@@ -82,6 +100,9 @@ export function AdSection({ placement, className = "", maxAds = 3 }: AdSectionPr
 
   // Track click when user clicks on ad
   const trackClick = useCallback(async (adId: string) => {
+    const API_BASE = getApiBase();
+    if (!API_BASE) return;
+
     try {
       await fetch(`${API_BASE}/api/ads/${adId}/click`, {
         method: "POST",
@@ -117,7 +138,20 @@ export function AdSection({ placement, className = "", maxAds = 3 }: AdSectionPr
   // Get proper image URL
   const getImageUrl = (imageUrl: string): string => {
     if (!imageUrl) return "/placeholder.svg"
+
+    // Fix old localhost URLs to relative paths
+    if (imageUrl.includes('/share/') && (imageUrl.includes('localhost') || imageUrl.includes('127.0.0.1'))) {
+      const match = imageUrl.match(/\/share\/[^/]+\/raw/)
+      if (match) return match[0]
+    }
+
     if (imageUrl.startsWith("http")) return imageUrl
+    // Handle share links (relative to frontend)
+    if (imageUrl.startsWith("/share/")) {
+      return imageUrl // Relative URL, browser will resolve to current origin
+    }
+    const API_BASE = getApiBase();
+    if (!API_BASE) return "/placeholder.svg";
     // Handle relative paths from backend
     if (imageUrl.startsWith("/storage")) {
       return `${API_BASE}${imageUrl}`
@@ -152,7 +186,7 @@ export function AdSection({ placement, className = "", maxAds = 3 }: AdSectionPr
         }}
       >
         {/* Ad Image */}
-        <div className="relative aspect-video overflow-hidden">
+        <div className="relative overflow-hidden" style={{ height: '90px' }}>
           <img
             src={imageUrl}
             alt={ad.title}
@@ -183,14 +217,10 @@ export function AdSection({ placement, className = "", maxAds = 3 }: AdSectionPr
   // Banner placement (horizontal, full width)
   if (placement === "home-banner" || placement === "video-top") {
     return (
-      <div className={`w-full ${className}`}>
-        {ads.length === 1 ? (
-          renderAd(ads[0], 0)
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {ads.map((ad, index) => renderAd(ad, index))}
-          </div>
-        )}
+      <div className={`w-full ${className}`} style={{ maxWidth: '768px', margin: '0 auto' }}>
+        <div className="space-y-4">
+          {ads.map((ad, index) => renderAd(ad, index))}
+        </div>
       </div>
     )
   }

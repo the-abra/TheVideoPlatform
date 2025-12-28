@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react"
 import { type Category } from "@/lib/storage"
 
-const API_BASE = "http://localhost:5000"
+const getApiBase = () => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.hostname}:5000`;
+  }
+  return "";
+};
 
 export function CategoryStrip({
   onCategorySelect,
@@ -17,8 +22,17 @@ export function CategoryStrip({
   useEffect(() => {
     // Fetch categories from backend API
     const fetchCategories = async () => {
+      const API_BASE = getApiBase();
+      if (!API_BASE) return; // Skip if not on client side
+
+      console.log('[CategoryStrip] Fetching from:', `${API_BASE}/api/categories`);
+
       try {
-        const response = await fetch(`${API_BASE}/api/categories`)
+        const response = await fetch(`${API_BASE}/api/categories`, {
+          headers: {
+            'Accept': 'application/json',
+          },
+        })
         if (response.ok) {
           const data = await response.json()
           // Backend returns { success, data: { categories } }
@@ -30,7 +44,8 @@ export function CategoryStrip({
           setCategories([])
         }
       } catch (error) {
-        console.error('Error fetching categories:', error)
+        console.error('[CategoryStrip] Error fetching categories:', error)
+        console.error('[CategoryStrip] API_BASE was:', API_BASE)
         setCategories([])
       }
     }

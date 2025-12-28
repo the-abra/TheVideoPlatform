@@ -11,7 +11,12 @@ import { MaintenanceBanner } from "@/components/maintenance-banner"
 import { AdSection } from "@/components/ad-section"
 import { storage } from "@/lib/storage"
 
-const API_BASE = "http://localhost:5000"
+const getApiBase = () => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.hostname}:5000`;
+  }
+  return "";
+};
 
 export function HomeContent() {
   const searchParams = useSearchParams()
@@ -27,8 +32,20 @@ export function HomeContent() {
 
     // Fetch videos from backend API
     const fetchVideos = async () => {
+      const API_BASE = getApiBase();
+      if (!API_BASE) {
+        setIsLoading(false);
+        return; // Skip if not on client side
+      }
+
+      console.log('[HomeContent] Fetching from:', `${API_BASE}/api/videos`);
+
       try {
-        const response = await fetch(`${API_BASE}/api/videos`)
+        const response = await fetch(`${API_BASE}/api/videos`, {
+          headers: {
+            'Accept': 'application/json',
+          },
+        })
         if (response.ok) {
           const data = await response.json()
           // Backend returns { success, data: { videos, pagination } }
@@ -38,7 +55,8 @@ export function HomeContent() {
           setCustomVideos([])
         }
       } catch (error) {
-        console.error('Error fetching videos:', error)
+        console.error('[HomeContent] Error fetching videos:', error)
+        console.error('[HomeContent] API_BASE was:', API_BASE)
         setCustomVideos([])
       } finally {
         const settings = storage.getSiteSettings()

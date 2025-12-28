@@ -3,6 +3,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { Play } from "lucide-react"
+import { fixThumbnailUrl } from "@/lib/url-utils"
 
 interface MediaCardProps {
   id: number
@@ -32,7 +33,7 @@ export function MediaCard({
           {/* 16:9 aspect ratio container */}
           <div className="aspect-video relative">
             <Image
-              src={thumbnail || "/placeholder.svg"}
+              src={fixThumbnailUrl(thumbnail)}
               alt={title}
               fill
               className="object-cover transition-transform duration-300 group-hover:scale-105"
