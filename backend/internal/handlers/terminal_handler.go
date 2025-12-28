@@ -6,22 +6,39 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
+	"titan-backend/internal/services"
 )
 
 type TerminalHandler struct {
-	upgrader websocket.Upgrader
+	upgrader    websocket.Upgrader
+	authService *services.AuthService
 }
 
-func NewTerminalHandler() *TerminalHandler {
+func NewTerminalHandler(authService *services.AuthService) *TerminalHandler {
 	return &TerminalHandler{
+		authService: authService,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				return true // Allow all origins for development
+				// Only allow requests from allowed origins
+				origin := r.Header.Get("Origin")
+				allowedOrigins := []string{
+					"http://localhost:3000",
+					"http://localhost:3001",
+					os.Getenv("FRONTEND_URL"),
+				}
+				for _, allowed := range allowedOrigins {
+					if allowed != "" && origin == allowed {
+						return true
+					}
+				}
+				// Allow same-origin requests (no Origin header)
+				return origin == ""
 			},
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -38,7 +55,37 @@ type TerminalMessage struct {
 }
 
 // HandleTerminal handles WebSocket connections for the interactive terminal
+// SECURITY: Requires admin authentication via token query parameter
 func (h *TerminalHandler) HandleTerminal(w http.ResponseWriter, r *http.Request) {
+	// Authenticate user before allowing terminal access
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		// Try Authorization header as fallback
+		authHeader := r.Header.Get("Authorization")
+		token = strings.TrimPrefix(authHeader, "Bearer ")
+	}
+
+	if token == "" {
+		http.Error(w, "Unauthorized: Missing authentication token", http.StatusUnauthorized)
+		log.Printf("[Terminal] SECURITY: Blocked unauthenticated terminal access attempt from %s", r.RemoteAddr)
+		return
+	}
+
+	// Validate token and check admin role
+	claims, err := h.authService.ValidateToken(token)
+	if err != nil {
+		http.Error(w, "Unauthorized: Invalid token", http.StatusUnauthorized)
+		log.Printf("[Terminal] SECURITY: Blocked terminal access with invalid token from %s", r.RemoteAddr)
+		return
+	}
+
+	// Only allow admin users to access terminal
+	if claims.Role != "admin" {
+		http.Error(w, "Forbidden: Admin access required", http.StatusForbidden)
+		log.Printf("[Terminal] SECURITY: Blocked non-admin user '%s' from accessing terminal", claims.Username)
+		return
+	}
+
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("[Terminal] WebSocket upgrade failed: %v", err)
@@ -46,7 +93,7 @@ func (h *TerminalHandler) HandleTerminal(w http.ResponseWriter, r *http.Request)
 	}
 	defer conn.Close()
 
-	log.Println("[Terminal] New terminal connection established")
+	log.Printf("[Terminal] New terminal connection established for admin user: %s (UserID: %d)", claims.Username, claims.UserID)
 
 	// Determine shell to use
 	shell := os.Getenv("SHELL")

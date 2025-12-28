@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"titan-backend/internal/middleware"
@@ -33,18 +34,31 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sanitize inputs
+	req.Username = middleware.SanitizeString(req.Username)
+	req.Password = middleware.SanitizeString(req.Password)
+
 	if req.Username == "" || req.Password == "" {
 		models.RespondError(w, "Username and password are required", http.StatusBadRequest)
 		return
 	}
 
+	// Validate username format
+	if !middleware.ValidateUsername(req.Username) {
+		log.Printf("[Auth] SECURITY: Invalid username format attempt from IP: %s", r.RemoteAddr)
+		models.RespondError(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
 	user, err := h.userRepo.GetByUsername(req.Username)
 	if err != nil {
+		log.Printf("[Auth] ERROR: Database error during login for username '%s': %v", req.Username, err)
 		models.RespondError(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	if user == nil || !user.CheckPassword(req.Password) {
+		log.Printf("[Auth] SECURITY: Failed login attempt for username '%s' from IP: %s", req.Username, r.RemoteAddr)
 		models.RespondError(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
@@ -57,6 +71,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	// Update last login
 	h.userRepo.UpdateLastLogin(user.ID)
+
+	log.Printf("[Auth] Successful login for user '%s' (ID: %d, Role: %s) from IP: %s", user.Username, user.ID, user.Role, r.RemoteAddr)
 
 	models.RespondSuccess(w, "Authentication successful", map[string]interface{}{
 		"token":     token,

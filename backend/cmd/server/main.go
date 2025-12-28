@@ -3,6 +3,9 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -68,20 +71,63 @@ func main() {
 	settingsHandler := handlers.NewSettingsHandler(settingsRepo)
 	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService)
 	serverHandler := handlers.NewServerHandler(serverService, serverLogRepo)
-	fileHandler := handlers.NewFileHandler(fileRepo, fileService)
-	terminalHandler := handlers.NewTerminalHandler()
+	fileOpsHandler := handlers.NewFileOperations(fileRepo, fileService)
+	directoryHandler := handlers.NewDirectoryHandler(fileService)
+	terminalHandler := handlers.NewTerminalHandler(authService) // Pass authService for authentication
 	securityHandler := handlers.NewSecurityHandler()
 
 	// Create router
 	r := chi.NewRouter()
 
+	// Initialize rate limiters
+	generalLimiter := middleware.NewRateLimiter(100, 1*time.Minute)      // 100 req/min for general API
+	loginLimiter := middleware.NewRateLimiter(5, 1*time.Minute)          // 5 req/min for login
+	uploadLimiter := middleware.NewRateLimiter(10, 1*time.Hour)          // 10 req/hour for uploads
+
 	// Middleware
 	r.Use(middleware.Recovery)
 	r.Use(middleware.Logger)
+	r.Use(middleware.SecurityValidationMiddleware()) // Security validation
+	r.Use(middleware.RateLimitMiddleware(generalLimiter)) // General rate limiting
+
+	// CORS Middleware - Environment-aware security configuration
 	r.Use(cors.Handler(cors.Options{
 		AllowOriginFunc: func(r *http.Request, origin string) bool {
-			// Allow all origins for development
-			return true
+			// Get environment mode
+			env := os.Getenv("ENV")
+
+			// Development mode: Allow localhost and local network
+			if env == "development" {
+				if origin == "" {
+					return true // Allow same-origin requests
+				}
+				// Allow localhost and local IPs
+				if strings.HasPrefix(origin, "http://localhost:") ||
+					strings.HasPrefix(origin, "http://127.0.0.1:") ||
+					strings.HasPrefix(origin, "http://10.") ||
+					strings.HasPrefix(origin, "http://192.168.") ||
+					strings.HasPrefix(origin, "http://172.") {
+					return true
+				}
+			}
+
+			// Production mode: Only allow configured origins
+			allowedOrigins := strings.Split(config.AllowedOrigins, ",")
+			for _, allowed := range allowedOrigins {
+				allowed = strings.TrimSpace(allowed)
+				if allowed != "" && allowed != "*" && origin == allowed {
+					return true
+				}
+			}
+
+			// Also check FRONTEND_URL environment variable
+			frontendURL := os.Getenv("FRONTEND_URL")
+			if frontendURL != "" && origin == frontendURL {
+				return true
+			}
+
+			log.Printf("[CORS] SECURITY: Blocked request from unauthorized origin: %s", origin)
+			return false
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Requested-With"},
@@ -109,8 +155,11 @@ func main() {
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {
-		// Public auth routes
-		r.Post("/auth/login", authHandler.Login)
+		// Public auth routes - with stricter rate limiting
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RateLimitMiddleware(loginLimiter))
+			r.Post("/auth/login", authHandler.Login)
+		})
 
 		// Public video routes
 		r.Get("/videos", videoHandler.GetAll)
@@ -135,7 +184,7 @@ func main() {
 		r.Get("/check-vpn", securityHandler.CheckVPN)
 
 		// Public file sharing routes
-		fileHandler.RegisterPublicRoutes(r)
+		fileOpsHandler.RegisterPublicRoutes(r)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
@@ -144,8 +193,11 @@ func main() {
 			// Auth verification
 			r.Get("/auth/verify", authHandler.Verify)
 
-			// Video management
-			r.Post("/videos", videoHandler.Create)
+			// Video management - with upload rate limiting
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RateLimitMiddleware(uploadLimiter))
+				r.Post("/videos", videoHandler.Create)
+			})
 			r.Put("/videos/{id}", videoHandler.Update)
 			r.Delete("/videos/{id}", videoHandler.Delete)
 
@@ -170,7 +222,10 @@ func main() {
 			serverHandler.RegisterRoutes(r)
 
 			// File management (protected)
-			fileHandler.RegisterRoutes(r)
+			fileOpsHandler.RegisterRoutes(r)
+
+			// Directory management (protected)
+			directoryHandler.RegisterRoutes(r)
 		})
 	})
 

@@ -1,13 +1,10 @@
 /**
  * Fix media URLs to work across different network environments (localhost, IP addresses, etc.)
+ *
+ * OPTIMIZATION: Uses centralized API client for consistent URL handling
  */
 
-const getApiBase = () => {
-  if (typeof window !== 'undefined') {
-    return `${window.location.protocol}//${window.location.hostname}:5000`;
-  }
-  return "";
-};
+import { apiClient } from './api-client';
 
 /**
  * Convert media URL to work from any origin
@@ -38,8 +35,7 @@ export function fixMediaUrl(url: string): string {
       }
 
       // Storage files go to backend
-      const API_BASE = getApiBase();
-      return API_BASE ? `${API_BASE}${path}` : path;
+      return apiClient.getApiUrl(path);
     }
   }
 
@@ -50,8 +46,7 @@ export function fixMediaUrl(url: string): string {
 
   // Relative storage path
   if (url.startsWith("/storage/")) {
-    const API_BASE = getApiBase();
-    return API_BASE ? `${API_BASE}${url}` : url;
+    return apiClient.getApiUrl(url);
   }
 
   // Default: return as-is

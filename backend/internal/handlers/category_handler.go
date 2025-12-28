@@ -2,25 +2,41 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"titan-backend/internal/cache"
 	"titan-backend/internal/models"
 )
 
 type CategoryHandler struct {
 	categoryRepo *models.CategoryRepository
+	cache        *cache.Cache
 }
 
 func NewCategoryHandler(categoryRepo *models.CategoryRepository) *CategoryHandler {
 	return &CategoryHandler{
 		categoryRepo: categoryRepo,
+		cache:        cache.NewCache(5 * time.Minute), // Cache for 5 minutes
 	}
 }
 
 func (h *CategoryHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+	cacheKey := "categories:all"
+
+	// Try to get from cache first
+	if cached, found := h.cache.Get(cacheKey); found {
+		log.Println("[Cache] HIT: Categories retrieved from cache")
+		models.RespondSuccess(w, "", cached, http.StatusOK)
+		return
+	}
+
+	// Cache miss - fetch from database
+	log.Println("[Cache] MISS: Fetching categories from database")
 	categories, err := h.categoryRepo.GetAll()
 	if err != nil {
 		models.RespondError(w, "Failed to fetch categories", http.StatusInternalServerError)
@@ -36,10 +52,15 @@ func (h *CategoryHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	models.RespondSuccess(w, "", map[string]interface{}{
+	result := map[string]interface{}{
 		"categories": filtered,
 		"total":      len(filtered),
-	}, http.StatusOK)
+	}
+
+	// Store in cache
+	h.cache.Set(cacheKey, result)
+
+	models.RespondSuccess(w, "", result, http.StatusOK)
 }
 
 func (h *CategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +100,10 @@ func (h *CategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		models.RespondError(w, "Failed to create category", http.StatusInternalServerError)
 		return
 	}
+
+	// Invalidate cache
+	h.cache.Delete("categories:all")
+	log.Println("[Cache] Invalidated categories cache after create")
 
 	models.RespondSuccess(w, "Category created successfully", map[string]interface{}{
 		"category": category,
@@ -121,6 +146,10 @@ func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Invalidate cache
+	h.cache.Delete("categories:all")
+	log.Println("[Cache] Invalidated categories cache after update")
+
 	models.RespondSuccess(w, "Category updated successfully", map[string]interface{}{
 		"category": existing,
 	}, http.StatusOK)
@@ -150,6 +179,10 @@ func (h *CategoryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		models.RespondError(w, "Failed to delete category", http.StatusInternalServerError)
 		return
 	}
+
+	// Invalidate cache
+	h.cache.Delete("categories:all")
+	log.Println("[Cache] Invalidated categories cache after delete")
 
 	models.RespondSuccess(w, "Category deleted successfully", map[string]interface{}{
 		"deletedId": id,

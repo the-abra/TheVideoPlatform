@@ -153,6 +153,10 @@ func (h *VideoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Normalize URLs to relative paths for portability
+	videoURL = utils.NormalizeStorageURL(videoURL)
+	thumbnailURL = utils.NormalizeStorageURL(thumbnailURL)
+
 	// Create video record
 	video := &models.Video{
 		Title:       title,

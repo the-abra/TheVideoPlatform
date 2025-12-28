@@ -64,8 +64,11 @@ func (s *AuthService) ValidateToken(tokenString string) (*JWTClaims, error) {
 
 func GetJWTSecret() string {
 	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		secret = "default-secret-change-me"
+	if secret == "" || secret == "default-secret-change-me" || secret == "your-jwt-secret-key-here" {
+		panic("SECURITY ERROR: JWT_SECRET must be set to a strong random value in .env file. Never use default values in production!")
+	}
+	if len(secret) < 32 {
+		panic("SECURITY ERROR: JWT_SECRET must be at least 32 characters long")
 	}
 	return secret
 }

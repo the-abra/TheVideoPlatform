@@ -1,60 +1,261 @@
-# Titan UI/UX Design Platform
+# TheVideoPlatform
 
-A comprehensive platform for UI/UX design with backend and frontend components.
+A modern, full-stack video streaming platform built with Go and Next.js, featuring integrated file storage, real-time server monitoring, and comprehensive content management.
 
-## Project Structure
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Go Version](https://img.shields.io/badge/go-1.21%2B-00ADD8)
+![Next.js](https://img.shields.io/badge/next.js-16%2B-black)
 
-- `backend/` - Go-based backend server with database and API endpoints
-- `frontend/` - Next.js frontend application with UI components
+## ✨ Features
 
-## Prerequisites
+### Core Functionality
+- 🎥 **Video Management** - Upload, organize, and stream videos with support for external sources
+- 📁 **File Drive** - Integrated file storage system with folder hierarchy and file preview
+- 🔗 **Secure File Sharing** - Share files with expiry dates, download limits, and unique tokens
+- 📊 **Analytics Dashboard** - Track views, popular content, and engagement metrics
+- 💬 **Category System** - Organize content with customizable categories and icons
+- 📺 **Advertisement Management** - Built-in ad system with click/impression tracking
 
-- Go 1.21+
-- Node.js 18+
-- pnpm (recommended) or npm
-- SQLite (for the database)
+### Advanced Features
+- 🔐 **JWT Authentication** - Secure user authentication with role-based access
+- 🖥️ **Server Management** - Real-time monitoring with WebSocket-based metrics
+- 🔒 **Security** - Rate limiting, input validation, VPN/ad-blocker detection
+- 🎨 **Modern UI** - Beautiful, responsive interface built with Next.js and Radix UI
+- 🛠️ **Web Terminal** - Browser-based terminal access for server administration
+- 📈 **Real-time Updates** - WebSocket support for live metrics and logs
 
-## Quick Setup
+### Recent Improvements ✨
+- ✅ **Refactored Backend** - Split large handlers into focused, maintainable modules
+- ✅ **Structured Logging** - Production-ready logging with component tags and JSON output
+- ✅ **Error Handling** - Type-safe error codes with proper HTTP status mapping
+- ✅ **Comprehensive Docs** - Complete API reference and development guide
 
-1. Clone the repository:
+## 🚀 Quick Start
+
+### Prerequisites
+
+- **Go** 1.21 or higher
+- **Node.js** 18 or higher
+- **npm** or **yarn**
+
+### Installation
+
+1. **Clone the repository**
    ```bash
-   git clone <your-repo-url>
-   cd titan-ui-ux-design
+   git clone <repository-url>
+   cd TheVideoPlatform
    ```
 
-2. Setup backend:
+2. **Set up the backend**
    ```bash
    cd backend
-   go mod tidy
-   cp .env.example .env  # Customize environment variables as needed
+   cp .env.example .env  # Edit with your configuration
+   go mod download
    go run cmd/server/main.go
    ```
 
-3. In a new terminal, setup frontend:
+3. **Set up the frontend**
    ```bash
    cd frontend
-   pnpm install  # or npm install
-   pnpm dev      # or npm run dev
+   npm install
+   cp .env.example .env.local  # Edit with your backend URL
+   npm run dev
    ```
 
-4. Visit `http://localhost:3000` to see the application
+4. **Access the application**
+   - **Frontend:** http://localhost:3000
+   - **Backend API:** http://localhost:5000
+   - **Admin Panel:** http://localhost:3000/admin
 
-## Environment Variables
+### Default Credentials
 
-The application requires environment configuration. See the `.env.example` file in the backend directory for required variables.
+```
+Username: admin
+Password: admin123
+```
 
-## Database
+⚠️ **IMPORTANT:** Change these credentials immediately in production!
 
-The application uses SQLite for data storage. The database file will be created automatically when the backend starts.
+## 📚 Documentation
 
-## Contributing
+- **[API Reference](./API_REFERENCE.md)** - Complete API endpoint documentation
+- **[Development Guide](./DEVELOPMENT_GUIDE.md)** - Architecture, best practices, and development workflow
+
+## 🏗️ Architecture
+
+### Tech Stack
+
+**Backend:**
+- **Language:** Go 1.21+
+- **Framework:** Chi Router
+- **Database:** SQLite (easily swappable for PostgreSQL/MySQL)
+- **Authentication:** JWT
+- **WebSockets:** Native Go support
+
+**Frontend:**
+- **Framework:** Next.js 16+ (React 19)
+- **Language:** TypeScript (strict mode)
+- **UI Library:** Radix UI
+- **Styling:** TailwindCSS 4.x
+- **State:** React Hooks
+
+### Project Structure
+
+```
+TheVideoPlatform/
+├── backend/
+│   ├── cmd/
+│   │   └── server/          # Application entry point
+│   ├── internal/
+│   │   ├── cache/           # Caching layer
+│   │   ├── database/        # Database & migrations
+│   │   ├── errors/          # Structured error handling ✨
+│   │   ├── handlers/        # HTTP handlers (refactored) ✨
+│   │   ├── logger/          # Structured logging ✨
+│   │   ├── middleware/      # Auth, rate limiting, validation
+│   │   ├── models/          # Data models & repositories
+│   │   ├── services/        # Business logic
+│   │   └── utils/           # Utilities
+│   └── storage/             # File storage
+├── frontend/
+│   ├── app/                 # Next.js pages
+│   ├── components/          # React components
+│   ├── lib/                 # Utilities
+│   └── public/              # Static assets
+├── API_REFERENCE.md         # API documentation
+├── DEVELOPMENT_GUIDE.md     # Development guide
+└── README.md                # This file
+```
+
+## 🔧 Configuration
+
+### Backend Environment Variables
+
+Create `backend/.env`:
+
+```env
+# Server
+PORT=5000
+ENV=development  # or production
+
+# Database
+DATABASE_PATH=./titan.db
+
+# Authentication
+JWT_SECRET=your-secret-key-change-in-production
+JWT_EXPIRY_HOURS=72
+DEFAULT_ADMIN_USER=admin
+DEFAULT_ADMIN_PASS=admin123
+
+# Storage
+STORAGE_PATH=./storage
+VIDEO_PATH=./storage/videos
+THUMBNAIL_PATH=./storage/thumbnails
+AD_PATH=./storage/ads
+
+# CORS
+ALLOWED_ORIGINS=http://localhost:3000
+FRONTEND_URL=http://localhost:3000
+```
+
+### Frontend Environment Variables
+
+Create `frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000
+```
+
+## 🛠️ Development
+
+### Running Tests
+
+```bash
+# Backend
+cd backend
+go test ./...
+
+# Frontend
+cd frontend
+npm test
+```
+
+### Building for Production
+
+```bash
+# Backend
+cd backend
+go build -o server cmd/server/main.go
+
+# Frontend
+cd frontend
+npm run build
+npm start
+```
+
+## 📖 API Examples
+
+```bash
+# Login
+curl -X POST http://localhost:5000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+
+# Upload File
+curl -X POST http://localhost:5000/api/files/upload \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@video.mp4"
+
+# Create Share Link
+curl -X POST http://localhost:5000/api/files/path/to/file.mp4/share \
+  -H "Authorization: Bearer <token>" \
+  -d '{"expiryHours": 24}'
+```
+
+For complete API documentation, see [API_REFERENCE.md](./API_REFERENCE.md).
+
+## 🔒 Security Features
+
+- ✅ JWT Authentication & Authorization
+- ✅ Rate Limiting (configurable per endpoint)
+- ✅ Input Validation (SQL injection, XSS, path traversal protection)
+- ✅ CORS Protection (environment-aware)
+- ✅ Secure Password Hashing (bcrypt)
+- ✅ VPN Detection (optional)
+- ✅ Structured Error Messages (no system info leakage)
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+3. Follow existing code style and use structured logging/errors
+4. Add tests for new features
+5. Update documentation
+6. Commit changes (`git commit -m 'Add amazing feature'`)
+7. Push to branch (`git push origin feature/amazing-feature`)
+8. Open a Pull Request
 
-## License
+See [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md) for detailed guidelines.
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+## 🐛 Troubleshooting
+
+**"CORS error"** - Check `ALLOWED_ORIGINS` in backend `.env`
+**"Authentication failed"** - Verify `JWT_SECRET` consistency and token format
+**"File upload fails"** - Check `STORAGE_PATH` permissions and disk space
+**"WebSocket connection fails"** - Verify protocol and authentication token
+
+For more help, see [DEVELOPMENT_GUIDE.md](./DEVELOPMENT_GUIDE.md#troubleshooting).
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [Go Chi](https://github.com/go-chi/chi) - HTTP router
+- [Next.js](https://nextjs.org/) - React framework
+- [Radix UI](https://www.radix-ui.com/) - UI components
+- [TailwindCSS](https://tailwindcss.com/) - CSS framework
+- [SQLite](https://www.sqlite.org/) - Database

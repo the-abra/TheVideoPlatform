@@ -2141,7 +2141,7 @@ export default function AdminPage() {
 
               {/* Real Terminal */}
               <div className="h-[500px]">
-                <XTerminal wsUrl={`${WS_BASE}/ws/terminal`} className="h-full" />
+                <XTerminal wsUrl={`${WS_BASE}/ws/terminal?token=${authToken || localStorage.getItem("titanAuthToken") || ""}`} className="h-full" />
               </div>
             </div>
 
