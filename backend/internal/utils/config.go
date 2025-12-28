@@ -9,7 +9,8 @@ type Config struct {
 	Port             string
 	Host             string
 	Env              string
-	DatabasePath     string
+	DatabaseURL      string // PostgreSQL connection URL
+	DatabasePath     string // SQLite path (fallback for local dev)
 	JWTSecret        string
 	JWTExpiryHours   int
 	AllowedOrigins   string
@@ -28,6 +29,7 @@ func LoadConfig() *Config {
 		Port:             getEnv("PORT", "5000"),
 		Host:             getEnv("HOST", "localhost"),
 		Env:              getEnv("ENV", "development"),
+		DatabaseURL:      getEnv("DATABASE_URL", ""),
 		DatabasePath:     getEnv("DATABASE_PATH", "./titan.db"),
 		JWTSecret:        getEnv("JWT_SECRET", "default-secret-change-me"),
 		JWTExpiryHours:   getEnvAsInt("JWT_EXPIRY_HOURS", 24),
@@ -38,8 +40,8 @@ func LoadConfig() *Config {
 		VideoPath:        getEnv("VIDEO_PATH", "./storage/videos"),
 		ThumbnailPath:    getEnv("THUMBNAIL_PATH", "./storage/thumbnails"),
 		AdPath:           getEnv("AD_PATH", "./storage/ads"),
-		DefaultAdminUser: getEnv("DEFAULT_ADMIN_USERNAME", "admin"),
-		DefaultAdminPass: getEnv("DEFAULT_ADMIN_PASSWORD", "admin"),
+		DefaultAdminUser: getEnv("DEFAULT_ADMIN_USER", "admin"),
+		DefaultAdminPass: getEnv("DEFAULT_ADMIN_PASS", "admin123"),
 	}
 }
 

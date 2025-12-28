@@ -1,0 +1,26 @@
+# Ignore files that shouldn't be in Docker image
+.env
+*.db
+*.db-shm
+*.db-wal
+server
+*.log
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# Storage (will be mounted as volume)
+storage/
+
+# Test files
+*_test.go
+coverage.out
+coverage.html
+
+# Docs
+*.md

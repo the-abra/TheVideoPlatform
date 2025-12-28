@@ -32,40 +32,61 @@ A modern, full-stack video streaming platform built with Go and Next.js, featuri
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### Option 1: Docker (Recommended)
 
-- **Go** 1.21 or higher
-- **Node.js** 18 or higher
-- **npm** or **yarn**
+**Prerequisites:** Docker and Docker Compose
 
-### Installation
+```bash
+# 1. Clone repository
+git clone <repository-url>
+cd TheVideoPlatform
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd TheVideoPlatform
-   ```
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your settings (change passwords!)
 
-2. **Set up the backend**
-   ```bash
-   cd backend
-   cp .env.example .env  # Edit with your configuration
-   go mod download
-   go run cmd/server/main.go
-   ```
+# 3. Start all services
+docker compose up -d
 
-3. **Set up the frontend**
-   ```bash
-   cd frontend
-   npm install
-   cp .env.example .env.local  # Edit with your backend URL
-   npm run dev
-   ```
+# 4. Check status
+docker compose ps
 
-4. **Access the application**
-   - **Frontend:** http://localhost:3000
-   - **Backend API:** http://localhost:5000
-   - **Admin Panel:** http://localhost:3000/admin
+# 5. Access application
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:5000
+# Admin Panel: http://localhost:3000/admin
+```
+
+**Services included:** PostgreSQL, Redis, Backend API, Frontend
+
+See **[Docker Deployment Guide](./DOCKER_DEPLOYMENT.md)** for detailed instructions.
+
+### Option 2: Local Development
+
+**Prerequisites:** Go 1.21+, Node.js 18+, npm/yarn
+
+```bash
+# 1. Clone the repository
+git clone <repository-url>
+cd TheVideoPlatform
+
+# 2. Set up the backend
+cd backend
+cp .env.example .env  # Edit with your configuration
+go mod download
+go run cmd/server/main.go
+
+# 3. Set up the frontend (new terminal)
+cd frontend
+npm install
+cp .env.example .env.local  # Edit with your backend URL
+npm run dev
+
+# 4. Access the application
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:5000
+# Admin Panel: http://localhost:3000/admin
+```
 
 ### Default Credentials
 
@@ -78,6 +99,7 @@ Password: admin123
 
 ## 📚 Documentation
 
+- **[Docker Deployment Guide](./DOCKER_DEPLOYMENT.md)** - Production deployment with Docker (recommended)
 - **[API Reference](./API_REFERENCE.md)** - Complete API endpoint documentation
 - **[Development Guide](./DEVELOPMENT_GUIDE.md)** - Architecture, best practices, and development workflow
 
@@ -88,7 +110,8 @@ Password: admin123
 **Backend:**
 - **Language:** Go 1.21+
 - **Framework:** Chi Router
-- **Database:** SQLite (easily swappable for PostgreSQL/MySQL)
+- **Database:** PostgreSQL (production) / SQLite (local dev)
+- **Cache:** Redis
 - **Authentication:** JWT
 - **WebSockets:** Native Go support
 
@@ -109,19 +132,27 @@ TheVideoPlatform/
 │   ├── internal/
 │   │   ├── cache/           # Caching layer
 │   │   ├── database/        # Database & migrations
-│   │   ├── errors/          # Structured error handling ✨
-│   │   ├── handlers/        # HTTP handlers (refactored) ✨
-│   │   ├── logger/          # Structured logging ✨
+│   │   ├── errors/          # Structured error handling
+│   │   ├── handlers/        # HTTP handlers (modular)
+│   │   ├── logger/          # Structured logging
 │   │   ├── middleware/      # Auth, rate limiting, validation
 │   │   ├── models/          # Data models & repositories
 │   │   ├── services/        # Business logic
 │   │   └── utils/           # Utilities
-│   └── storage/             # File storage
+│   ├── migrations/          # Database migrations
+│   ├── storage/             # File storage
+│   ├── Dockerfile           # Backend container
+│   └── .env.example         # Environment template
 ├── frontend/
-│   ├── app/                 # Next.js pages
+│   ├── app/                 # Next.js App Router pages
 │   ├── components/          # React components
 │   ├── lib/                 # Utilities
-│   └── public/              # Static assets
+│   ├── public/              # Static assets
+│   ├── Dockerfile           # Frontend container
+│   └── .env.example         # Environment template
+├── docker-compose.yml       # Container orchestration
+├── .env.example             # Docker environment template
+├── DOCKER_DEPLOYMENT.md     # Deployment guide
 ├── API_REFERENCE.md         # API documentation
 ├── DEVELOPMENT_GUIDE.md     # Development guide
 └── README.md                # This file

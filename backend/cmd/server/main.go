@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -29,18 +32,23 @@ func main() {
 	config := utils.LoadConfig()
 
 	// Initialize database
-	db, err := database.InitDB(config.DatabasePath)
+	db, err := database.InitDB(config.DatabaseURL, config.DatabasePath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer db.Close()
 
-	// Run migrations
-	if err := database.RunMigrations(db); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
+	// Run migrations only for SQLite (PostgreSQL uses migrate tool in Docker)
+	if config.DatabaseURL == "" {
+		log.Println("Running SQLite migrations...")
+		if err := database.RunMigrations(db); err != nil {
+			log.Fatalf("Failed to run migrations: %v", err)
+		}
+	} else {
+		log.Println("Using PostgreSQL - migrations handled by migrate tool")
 	}
 
-	// Seed default data
+	// Seed default data (admin user creation)
 	if err := database.SeedDefaultData(db, config.DefaultAdminUser, config.DefaultAdminPass); err != nil {
 		log.Fatalf("Failed to seed default data: %v", err)
 	}
@@ -144,8 +152,10 @@ func main() {
 		})
 	})
 
-	// Health check
-	r.Get("/health", healthHandler.HealthCheck)
+	// Health check endpoints
+	r.Get("/health", healthHandler.HealthCheck)           // Basic health check
+	r.Get("/health/ready", healthHandler.ReadinessCheck)  // Detailed readiness check
+	r.Get("/health/live", healthHandler.LivenessCheck)    // Kubernetes liveness probe
 
 	// WebSocket routes (no auth required for real-time streaming)
 	serverHandler.RegisterWebSocketRoutes(r)
@@ -236,15 +246,56 @@ func main() {
 	// Log server startup
 	serverService.Log("info", "Server starting on port "+config.Port, "main")
 
-	// Start server
+	// Start server with graceful shutdown
 	addr := "0.0.0.0:" + config.Port
+	srv := &http.Server{
+		Addr:         addr,
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	// Server startup info
 	log.Printf("Server starting on http://0.0.0.0:%s", config.Port)
 	log.Printf("Server accessible at http://<your-ip>:%s", config.Port)
 	log.Printf("Environment: %s", config.Env)
-	log.Printf("Database: %s", config.DatabasePath)
-	log.Printf("Admin user: %s", config.DefaultAdminUser)
-
-	if err := http.ListenAndServe(addr, r); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+	if config.DatabaseURL != "" {
+		log.Printf("Database: PostgreSQL")
+	} else {
+		log.Printf("Database: SQLite (%s)", config.DatabasePath)
 	}
+	log.Printf("Admin user: %s", config.DefaultAdminUser)
+	log.Printf("Health endpoints:")
+	log.Printf("  - /health (basic)")
+	log.Printf("  - /health/ready (detailed)")
+	log.Printf("  - /health/live (liveness)")
+
+	// Start server in goroutine
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed to start: %v", err)
+		}
+	}()
+
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Server is shutting down gracefully...")
+	serverService.Log("info", "Server shutdown initiated", "main")
+
+	// Create shutdown context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Shutdown server
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("Server forced to shutdown: %v", err)
+		serverService.Log("error", "Server forced shutdown: "+err.Error(), "main")
+	}
+
+	log.Println("Server stopped")
+	serverService.Log("info", "Server stopped successfully", "main")
 }
