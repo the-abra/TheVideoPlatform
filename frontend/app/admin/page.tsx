@@ -268,30 +268,12 @@ export default function AdminPage() {
         showToast("Successfully logged in", "success")
         loadData()
       } else {
-        // Fallback to local auth for demo
-        if (passwordInput === "admin") {
-          setIsAuthenticated(true)
-          storage.setAuthenticated(true)
-          setPasswordInput("")
-          showToast("Successfully logged in (demo mode)", "success")
-          loadData()
-        } else {
-          setPasswordError("Incorrect password")
-          setPasswordInput("")
-        }
+        setPasswordError(data.error || "Incorrect password")
+        setPasswordInput("")
       }
     } catch (error) {
-      // Fallback to local auth if backend unavailable
-      if (passwordInput === "admin") {
-        setIsAuthenticated(true)
-        storage.setAuthenticated(true)
-        setPasswordInput("")
-        showToast("Successfully logged in (offline mode)", "success")
-        loadData()
-      } else {
-        setPasswordError("Incorrect password")
-        setPasswordInput("")
-      }
+      setPasswordError("Unable to connect to server")
+      setPasswordInput("")
     }
     setIsLoading(false)
   }
@@ -730,29 +712,8 @@ export default function AdminPage() {
 
   // Server management functions
   const getAuthToken = async (): Promise<string | null> => {
-    // First check if we have a valid token
-    let token = authToken || localStorage.getItem("titanAuthToken")
-
-    if (!token) {
-      // Try to get a new token
-      console.log("[Server] No token found, attempting to authenticate...")
-      try {
-        const res = await fetch(`${API_BASE}/api/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: "admin", password: "admin" })
-        })
-        const data = await res.json()
-        if (data.success && data.data?.token) {
-          token = data.data.token
-          setAuthToken(token)
-          localStorage.setItem("titanAuthToken", token)
-          console.log("[Server] Got new auth token")
-        }
-      } catch (error) {
-        console.error("[Server] Failed to get auth token:", error)
-      }
-    }
+    // Check if we have a valid token
+    const token = authToken || localStorage.getItem("titanAuthToken")
     return token
   }
 
@@ -1350,7 +1311,6 @@ export default function AdminPage() {
               {isLoading ? <LoadingSpinner size="sm" /> : "Enter"}
             </button>
           </form>
-          <p className="text-xs text-muted-foreground text-center mt-6">Demo password: admin</p>
         </div>
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       </div>
