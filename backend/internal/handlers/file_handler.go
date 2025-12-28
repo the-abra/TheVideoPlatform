@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -156,8 +157,8 @@ func (h *FileHandler) List(w http.ResponseWriter, r *http.Request) {
 // Get single file info
 func (h *FileHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	// For file system approach, we'll get the file by name/path
-	// Get the file name from the URL parameter
-	filename := chi.URLParam(r, "id")
+	// Get the file name from the URL parameter (wildcard)
+	filename := chi.URLParam(r, "*")
 
 	// Check if file exists in the file system
 	if !h.fileService.FileExists(filename) {
@@ -193,8 +194,8 @@ func (h *FileHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 // Download file
 func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
-	// Get the file name from the URL parameter
-	filename := chi.URLParam(r, "id")
+	// Get the file name from the URL parameter (wildcard)
+	filename := chi.URLParam(r, "*")
 
 	// Check if file exists on disk
 	if !h.fileService.FileExists(filename) {
@@ -219,8 +220,8 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 
 // Delete file
 func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	// Get the file name from the URL parameter
-	filename := chi.URLParam(r, "id")
+	// Get the file name from the URL parameter (wildcard)
+	filename := chi.URLParam(r, "*")
 
 	// Check if file exists on disk
 	if !h.fileService.FileExists(filename) {
@@ -239,8 +240,8 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // Rename file
 func (h *FileHandler) Rename(w http.ResponseWriter, r *http.Request) {
-	// Get the file name from the URL parameter
-	filename := chi.URLParam(r, "id")
+	// Get the file name from the URL parameter (wildcard)
+	filename := chi.URLParam(r, "*")
 
 	var req struct {
 		Name string `json:"name"`
@@ -296,8 +297,8 @@ func (h *FileHandler) Rename(w http.ResponseWriter, r *http.Request) {
 
 // Create share link
 func (h *FileHandler) CreateShareLink(w http.ResponseWriter, r *http.Request) {
-	// Get the file name from the URL parameter
-	filename := chi.URLParam(r, "id")
+	// Get the file name from the URL parameter (wildcard)
+	filename := chi.URLParam(r, "*")
 
 	// Check if file exists on disk
 	if !h.fileService.FileExists(filename) {
@@ -495,7 +496,7 @@ func (h *FileHandler) CreateFolder(w http.ResponseWriter, r *http.Request) {
 
 // Delete folder
 func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
-	folderPath := chi.URLParam(r, "id")
+	folderPath := chi.URLParam(r, "*")
 	if folderPath == "" {
 		models.RespondError(w, "Invalid folder path", http.StatusBadRequest)
 		return
@@ -515,7 +516,7 @@ func (h *FileHandler) DeleteFolder(w http.ResponseWriter, r *http.Request) {
 
 // Get folder path (breadcrumb)
 func (h *FileHandler) GetFolderPath(w http.ResponseWriter, r *http.Request) {
-	folderPath := chi.URLParam(r, "id")
+	folderPath := chi.URLParam(r, "*")
 	if folderPath == "" {
 		models.RespondError(w, "Invalid folder path", http.StatusBadRequest)
 		return
@@ -604,7 +605,7 @@ func (h *FileHandler) GetFolderPath(w http.ResponseWriter, r *http.Request) {
 
 // Preview file (for images, PDFs, etc.)
 func (h *FileHandler) Preview(w http.ResponseWriter, r *http.Request) {
-	filename := chi.URLParam(r, "id")
+	filename := chi.URLParam(r, "*")
 
 	// Check if file exists on disk
 	if !h.fileService.FileExists(filename) {
@@ -668,22 +669,307 @@ func (h *FileHandler) ServeFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, filePath)
 }
 
+// HandleFileRoute dispatches file operations based on path suffix
+func (h *FileHandler) HandleFileRoute(w http.ResponseWriter, r *http.Request) {
+	rawPath := chi.URLParam(r, "*")
+	// URL decode the path since chi doesn't decode wildcard params
+	path, err := url.PathUnescape(rawPath)
+	if err != nil {
+		path = rawPath // Fall back to raw path if decode fails
+	}
+	log.Printf("[DEBUG] HandleFileRoute called - Method: %s, RawPath: %s, DecodedPath: %s", r.Method, rawPath, path)
+
+	switch r.Method {
+	case "GET":
+		if strings.HasSuffix(path, "/download") {
+			h.downloadWithPath(w, r, strings.TrimSuffix(path, "/download"))
+		} else if strings.HasSuffix(path, "/preview") {
+			h.previewWithPath(w, r, strings.TrimSuffix(path, "/preview"))
+		} else {
+			h.getByIDWithPath(w, r, path)
+		}
+	case "POST":
+		if strings.HasSuffix(path, "/share") {
+			h.createShareLinkWithPath(w, r, strings.TrimSuffix(path, "/share"))
+		} else {
+			models.RespondError(w, "Invalid operation", http.StatusBadRequest)
+		}
+	case "PUT":
+		if strings.HasSuffix(path, "/rename") {
+			h.renameWithPath(w, r, strings.TrimSuffix(path, "/rename"))
+		} else {
+			models.RespondError(w, "Invalid operation", http.StatusBadRequest)
+		}
+	case "DELETE":
+		if strings.HasSuffix(path, "/share") {
+			h.removeShareLinkWithPath(w, r, strings.TrimSuffix(path, "/share"))
+		} else {
+			h.deleteWithPath(w, r, path)
+		}
+	default:
+		models.RespondError(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// HandleFolderRoute dispatches folder operations based on path suffix
+func (h *FileHandler) HandleFolderRoute(w http.ResponseWriter, r *http.Request) {
+	rawPath := chi.URLParam(r, "*")
+	// URL decode the path since chi doesn't decode wildcard params
+	path, err := url.PathUnescape(rawPath)
+	if err != nil {
+		path = rawPath
+	}
+
+	switch r.Method {
+	case "GET":
+		if strings.HasSuffix(path, "/path") {
+			h.getFolderPathWithPath(w, r, strings.TrimSuffix(path, "/path"))
+		} else {
+			models.RespondError(w, "Invalid operation", http.StatusBadRequest)
+		}
+	case "DELETE":
+		h.deleteFolderWithPath(w, r, path)
+	default:
+		models.RespondError(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// Helper methods that take the path directly
+
+func (h *FileHandler) getByIDWithPath(w http.ResponseWriter, r *http.Request, filename string) {
+	if !h.fileService.FileExists(filename) {
+		models.RespondError(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	filePath := h.fileService.GetFilePath(filename)
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		models.RespondError(w, "Failed to get file info", http.StatusInternalServerError)
+		return
+	}
+
+	mimeType := h.fileService.GetMimeType(filename)
+	fileEntry := services.FileEntry{
+		Name:          filepath.Base(filename),
+		Path:          filename,
+		Size:          fileInfo.Size(),
+		MimeType:      mimeType,
+		Extension:     filepath.Ext(filename),
+		CreatedAt:     fileInfo.ModTime(),
+		Icon:          h.fileService.GetFileIcon(mimeType),
+		FormattedSize: h.fileService.FormatFileSize(fileInfo.Size()),
+	}
+
+	models.RespondSuccess(w, "", map[string]interface{}{
+		"file": fileEntry,
+	}, http.StatusOK)
+}
+
+func (h *FileHandler) downloadWithPath(w http.ResponseWriter, r *http.Request, filename string) {
+	if !h.fileService.FileExists(filename) {
+		models.RespondError(w, "File not found on disk", http.StatusNotFound)
+		return
+	}
+
+	filePath := h.fileService.GetFilePath(filename)
+	mimeType := h.fileService.GetMimeType(filename)
+
+	w.Header().Set("Content-Disposition", "attachment; filename=\""+filepath.Base(filename)+"\"")
+	w.Header().Set("Content-Type", mimeType)
+	http.ServeFile(w, r, filePath)
+}
+
+func (h *FileHandler) previewWithPath(w http.ResponseWriter, r *http.Request, filename string) {
+	if !h.fileService.FileExists(filename) {
+		models.RespondError(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	filePath := h.fileService.GetFilePath(filename)
+	mimeType := h.fileService.GetMimeType(filename)
+
+	w.Header().Set("Content-Type", mimeType)
+	http.ServeFile(w, r, filePath)
+}
+
+func (h *FileHandler) deleteWithPath(w http.ResponseWriter, r *http.Request, filename string) {
+	if !h.fileService.FileExists(filename) {
+		models.RespondError(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	if err := h.fileService.DeleteFile(filename); err != nil {
+		models.RespondError(w, "Failed to delete file", http.StatusInternalServerError)
+		return
+	}
+
+	models.RespondSuccess(w, "File deleted successfully", nil, http.StatusOK)
+}
+
+func (h *FileHandler) renameWithPath(w http.ResponseWriter, r *http.Request, filename string) {
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		models.RespondError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		models.RespondError(w, "Name is required", http.StatusBadRequest)
+		return
+	}
+
+	if !h.fileService.FileExists(filename) {
+		models.RespondError(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	// Get paths
+	oldPath := h.fileService.GetFilePath(filename)
+	dir := filepath.Dir(oldPath)
+	newPath := filepath.Join(dir, req.Name)
+
+	// Rename the file
+	if err := os.Rename(oldPath, newPath); err != nil {
+		models.RespondError(w, "Failed to rename file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Get new relative path
+	storagePath := h.fileService.GetStoragePath()
+	newRelPath, _ := filepath.Rel(storagePath, newPath)
+
+	fileInfo, _ := os.Stat(newPath)
+	mimeType := h.fileService.GetMimeType(newRelPath)
+
+	fileEntry := services.FileEntry{
+		Name:          req.Name,
+		Path:          newRelPath,
+		Size:          fileInfo.Size(),
+		MimeType:      mimeType,
+		Extension:     filepath.Ext(newRelPath),
+		CreatedAt:     fileInfo.ModTime(),
+		Icon:          h.fileService.GetFileIcon(mimeType),
+		FormattedSize: h.fileService.FormatFileSize(fileInfo.Size()),
+	}
+
+	models.RespondSuccess(w, "File renamed successfully", map[string]interface{}{
+		"file": fileEntry,
+	}, http.StatusOK)
+}
+
+func (h *FileHandler) createShareLinkWithPath(w http.ResponseWriter, r *http.Request, filename string) {
+	if !h.fileService.FileExists(filename) {
+		models.RespondError(w, "File not found", http.StatusNotFound)
+		return
+	}
+
+	var req struct {
+		ExpiryHours int `json:"expiryHours"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		req.ExpiryHours = 0
+	}
+
+	token := models.GenerateShareToken()
+
+	var expiry *time.Time
+	if req.ExpiryHours > 0 {
+		exp := time.Now().Add(time.Duration(req.ExpiryHours) * time.Hour)
+		expiry = &exp
+	}
+
+	h.shareMutex.Lock()
+	h.shareTokens[token] = &ShareInfo{
+		FileName:  filename,
+		Expiry:    expiry,
+		CreatedAt: time.Now(),
+		Downloads: 0,
+	}
+	h.shareMutex.Unlock()
+
+	models.RespondSuccess(w, "Share link created", map[string]interface{}{
+		"fileName":   filename,
+		"shareToken": token,
+		"shareUrl":   "/api/share/" + token,
+	}, http.StatusOK)
+}
+
+func (h *FileHandler) removeShareLinkWithPath(w http.ResponseWriter, r *http.Request, filename string) {
+	models.RespondSuccess(w, "Share link removed", nil, http.StatusOK)
+}
+
+func (h *FileHandler) deleteFolderWithPath(w http.ResponseWriter, r *http.Request, folderPath string) {
+	if folderPath == "" {
+		models.RespondError(w, "Invalid folder path", http.StatusBadRequest)
+		return
+	}
+
+	fullPath := filepath.Join(h.fileService.GetStoragePath(), folderPath)
+
+	if err := os.RemoveAll(fullPath); err != nil {
+		models.RespondError(w, "Failed to delete folder: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	models.RespondSuccess(w, "Folder deleted successfully", nil, http.StatusOK)
+}
+
+func (h *FileHandler) getFolderPathWithPath(w http.ResponseWriter, r *http.Request, folderPath string) {
+	if folderPath == "" {
+		models.RespondError(w, "Invalid folder path", http.StatusBadRequest)
+		return
+	}
+
+	fullPath := filepath.Join(h.fileService.GetStoragePath(), folderPath)
+
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		models.RespondError(w, "Folder not found", http.StatusNotFound)
+		return
+	}
+
+	parts := strings.Split(folderPath, string(os.PathSeparator))
+	path := []map[string]string{}
+
+	currentPath := ""
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		if currentPath == "" {
+			currentPath = part
+		} else {
+			currentPath = filepath.Join(currentPath, part)
+		}
+		path = append(path, map[string]string{
+			"name": part,
+			"path": currentPath,
+		})
+	}
+
+	models.RespondSuccess(w, "", map[string]interface{}{
+		"path": path,
+	}, http.StatusOK)
+}
+
 // RegisterRoutes registers all file management routes
 func (h *FileHandler) RegisterRoutes(r chi.Router) {
+	// Static routes first (these must come before wildcards)
 	r.Post("/files/upload", h.Upload)
 	r.Get("/files", h.List)
-	r.Get("/files/{id}", h.GetByID)
-	r.Get("/files/{id}/download", h.Download)
-	r.Get("/files/{id}/preview", h.Preview)
-	r.Delete("/files/{id}", h.Delete)
-	r.Put("/files/{id}/rename", h.Rename)
-	r.Post("/files/{id}/share", h.CreateShareLink)
-	r.Delete("/files/{id}/share", h.RemoveShareLink)
 	r.Delete("/files/bulk", h.BulkDelete)
-
 	r.Post("/folders", h.CreateFolder)
-	r.Delete("/folders/{id}", h.DeleteFolder)
-	r.Get("/folders/{id}/path", h.GetFolderPath)
+
+	// Wildcard routes for file operations with paths containing slashes
+	r.Get("/files/*", h.HandleFileRoute)
+	r.Post("/files/*", h.HandleFileRoute)
+	r.Put("/files/*", h.HandleFileRoute)
+	r.Delete("/files/*", h.HandleFileRoute)
+
+	r.Get("/folders/*", h.HandleFolderRoute)
+	r.Delete("/folders/*", h.HandleFolderRoute)
 }
 
 // RegisterPublicRoutes registers public file sharing routes

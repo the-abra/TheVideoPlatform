@@ -18,9 +18,8 @@ type FileService struct {
 
 func NewFileService(storagePath string) *FileService {
 	// Create storage directory if it doesn't exist
-	drivePath := filepath.Join(storagePath, "drive")
-	os.MkdirAll(drivePath, 0755)
-	return &FileService{storagePath: drivePath}
+	os.MkdirAll(storagePath, 0755)
+	return &FileService{storagePath: storagePath}
 }
 
 func (s *FileService) SaveFile(file multipart.File, header *multipart.FileHeader) (string, string, error) {

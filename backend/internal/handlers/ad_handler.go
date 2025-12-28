@@ -90,7 +90,7 @@ func (h *AdHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Validate placement
 	if !models.ValidPlacements[placement] {
-		models.RespondError(w, "Invalid placement. Must be one of: home-banner, home-sidebar, video-top, video-sidebar", http.StatusBadRequest)
+		models.RespondError(w, "Invalid placement. Must be one of: home-banner, home-sidebar, video-top, video-sidebar, video-random", http.StatusBadRequest)
 		return
 	}
 
@@ -100,19 +100,26 @@ func (h *AdHandler) Create(w http.ResponseWriter, r *http.Request) {
 		enabled = enabledStr == "true" || enabledStr == "1"
 	}
 
-	// Get image file
-	imageFile, imageHeader, err := r.FormFile("image")
-	if err != nil {
-		models.RespondError(w, "Image file is required", http.StatusBadRequest)
-		return
-	}
-	defer imageFile.Close()
+	var imageURL string
 
-	// Save image file
-	imageURL, err := h.storageService.SaveAdImage(imageFile, imageHeader)
-	if err != nil {
-		models.RespondError(w, "Failed to save image: "+err.Error(), http.StatusBadRequest)
-		return
+	// Check if imageUrl was provided (from drive)
+	if imgURL := r.FormValue("imageUrl"); imgURL != "" {
+		imageURL = imgURL
+	} else {
+		// Get image file
+		imageFile, imageHeader, err := r.FormFile("image")
+		if err != nil {
+			models.RespondError(w, "Image file or imageUrl is required", http.StatusBadRequest)
+			return
+		}
+		defer imageFile.Close()
+
+		// Save image file
+		imageURL, err = h.storageService.SaveAdImage(imageFile, imageHeader)
+		if err != nil {
+			models.RespondError(w, "Failed to save image: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Create ad
@@ -228,15 +235,26 @@ func (h *AdHandler) Update(w http.ResponseWriter, r *http.Request) {
 		existing.Enabled = enabledStr == "true" || enabledStr == "1"
 	}
 
-	// Handle new image upload
-	imageFile, imageHeader, err := r.FormFile("image")
-	if err == nil {
-		defer imageFile.Close()
-		newImageURL, err := h.storageService.SaveAdImage(imageFile, imageHeader)
-		if err == nil {
-			// Delete old image
+	// Handle new image/media - check for URL first, then file upload
+	if imgURL := r.FormValue("imageUrl"); imgURL != "" {
+		// URL provided from drive - only delete old if it's a local file
+		if !strings.HasPrefix(existing.ImageURL, "http") && !strings.HasPrefix(existing.ImageURL, "/share") {
 			h.storageService.DeleteFile(existing.ImageURL)
-			existing.ImageURL = newImageURL
+		}
+		existing.ImageURL = imgURL
+	} else {
+		// Handle file upload
+		imageFile, imageHeader, err := r.FormFile("image")
+		if err == nil {
+			defer imageFile.Close()
+			newImageURL, err := h.storageService.SaveAdImage(imageFile, imageHeader)
+			if err == nil {
+				// Delete old image only if it's a local file
+				if !strings.HasPrefix(existing.ImageURL, "http") && !strings.HasPrefix(existing.ImageURL, "/share") {
+					h.storageService.DeleteFile(existing.ImageURL)
+				}
+				existing.ImageURL = newImageURL
+			}
 		}
 	}
 

@@ -144,7 +144,7 @@ export default function AdminPage() {
   const [newFolderName, setNewFolderName] = useState("")
   const [shareModal, setShareModal] = useState<{ file: DriveFile; shareUrl: string } | null>(null)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
-  const [selectedFiles, setSelectedFiles] = useState<number[]>([])
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([])
 
   // File picker state for video creation
   const [showFilePicker, setShowFilePicker] = useState(false)
@@ -353,6 +353,8 @@ export default function AdminPage() {
       const token = authToken || localStorage.getItem("titanAuthToken")
       let shareUrl = ''
 
+      console.log('[FilePicker] Creating share link for:', file.path)
+
       // Create share link for this file
       const response = await fetch(`${API_BASE}/api/files/${encodeURIComponent(file.path)}/share`, {
         method: 'POST',
@@ -363,12 +365,14 @@ export default function AdminPage() {
         body: JSON.stringify({ expiryHours: 0 }) // No expiry
       })
 
-      if (response.ok) {
-        const data = await response.json()
+      const data = await response.json()
+      console.log('[FilePicker] Share response:', response.status, data)
+
+      if (response.ok && data.success) {
         const shareToken = data.data?.shareToken || data.shareToken
         shareUrl = `${window.location.origin}/share/${shareToken}/raw`
       } else {
-        showToast('Failed to create share link', 'error')
+        showToast(data.error || 'Failed to create share link', 'error')
         return
       }
 
@@ -1224,8 +1228,9 @@ export default function AdminPage() {
       })
       const data = await res.json()
       if (data.success) {
-        const shareUrl = `${window.location.origin}/share/${data.data.shareToken}`
-        setShareModal({ file: data.data.file, shareUrl })
+        const shareToken = data.data?.shareToken || data.shareToken
+        const shareUrl = `${window.location.origin}/share/${shareToken}`
+        setShareModal({ file, shareUrl })
         fetchDriveFiles(currentFolderPath)
       } else {
         showToast(data.error || "Failed to create share link", "error")
@@ -2350,7 +2355,8 @@ export default function AdminPage() {
                   {driveFolders.map((folder) => (
                     <div
                       key={`folder-${folder.path}`}
-                      className="flex items-center gap-4 p-4 hover:bg-background/50 transition-colors"
+                      className="flex items-center gap-4 p-4 hover:bg-background/50 transition-colors cursor-pointer"
+                      onDoubleClick={() => navigateToFolder(folder.path)}
                     >
                       <FolderOpen className="w-8 h-8 text-yellow-500" />
                       <div className="flex-1 min-w-0">
@@ -2365,7 +2371,7 @@ export default function AdminPage() {
                         </p>
                       </div>
                       <button
-                        onClick={() => handleDeleteFolder(folder.path)}
+                        onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.path); }}
                         className="p-2 text-muted-foreground hover:text-red-500 transition-colors"
                         title="Delete folder"
                       >
@@ -2536,7 +2542,7 @@ export default function AdminPage() {
                 Root
               </button>
               {filePickerPath.map((folder, index) => (
-                <div key={folder.id} className="flex items-center gap-1">
+                <div key={folder.path} className="flex items-center gap-1">
                   <ChevronRight className="w-4 h-4" />
                   <button
                     onClick={() => navigateFilePickerFolder(folder)}
@@ -2559,7 +2565,7 @@ export default function AdminPage() {
                   {/* Folders */}
                   {filePickerFolders.map((folder) => (
                     <button
-                      key={`folder-${folder.id}`}
+                      key={`folder-${folder.path}`}
                       onClick={() => navigateFilePickerFolder(folder)}
                       className="w-full flex items-center gap-3 p-3 hover:bg-secondary transition-colors text-left"
                     >
@@ -2577,7 +2583,7 @@ export default function AdminPage() {
                     )
                     .map((file) => (
                       <button
-                        key={`file-${file.id}`}
+                        key={`file-${file.path}`}
                         onClick={() => selectFileFromPicker(file)}
                         className="w-full flex items-center gap-3 p-3 hover:bg-secondary transition-colors text-left"
                       >
@@ -2587,14 +2593,11 @@ export default function AdminPage() {
                           <File className="w-5 h-5 text-green-400" />
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-foreground font-medium truncate">{file.originalName}</p>
+                          <p className="text-foreground font-medium truncate">{file.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {formatFileSize(file.size)} • {file.mimeType}
+                            {file.formattedSize} • {file.mimeType}
                           </p>
                         </div>
-                        {file.shareToken && (
-                          <Link className="w-4 h-4 text-accent" title="Has share link" />
-                        )}
                       </button>
                     ))}
 

@@ -2,12 +2,31 @@
 
 import type React from "react"
 import { useState, useEffect, useCallback } from "react"
-import { Plus, Trash2, Eye, EyeOff, ExternalLink, Edit2, X, ImageIcon, BarChart2 } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, ExternalLink, Edit2, X, ImageIcon, BarChart2, FolderOpen, VideoIcon, Home, ChevronRight, File } from "lucide-react"
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 
+// Drive file/folder types
+interface DriveFile {
+  name: string
+  path: string
+  size: number
+  mimeType: string
+  extension: string
+  createdAt: string
+  icon: string
+  formattedSize: string
+}
+
+interface DriveFolder {
+  name: string
+  path: string
+  createdAt: string
+  size: number
+}
+
 // Ad placement types
-type AdPlacement = "home-banner" | "home-sidebar" | "video-top" | "video-sidebar"
+type AdPlacement = "home-banner" | "home-sidebar" | "video-top" | "video-sidebar" | "video-random"
 
 // Ad interface
 interface Ad {
@@ -37,6 +56,7 @@ const PLACEMENT_OPTIONS: { value: AdPlacement; label: string }[] = [
   { value: "home-sidebar", label: "Home Sidebar" },
   { value: "video-top", label: "Video Top" },
   { value: "video-sidebar", label: "Video Sidebar" },
+  { value: "video-random", label: "Random (Between Videos)" },
 ]
 
 interface AdManagementProps {
@@ -52,6 +72,13 @@ export function AdManagement({ onToast }: AdManagementProps) {
   const [editingAd, setEditingAd] = useState<Ad | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  // File picker state
+  const [showFilePicker, setShowFilePicker] = useState(false)
+  const [filePickerFiles, setFilePickerFiles] = useState<DriveFile[]>([])
+  const [filePickerFolders, setFilePickerFolders] = useState<DriveFolder[]>([])
+  const [filePickerPath, setFilePickerPath] = useState<DriveFolder[]>([])
+  const [filePickerLoading, setFilePickerLoading] = useState(false)
+
   // Form state for creating/editing ads
   const [formData, setFormData] = useState({
     title: "",
@@ -60,6 +87,7 @@ export function AdManagement({ onToast }: AdManagementProps) {
     enabled: true,
     imageFile: null as File | null,
     imagePreview: "",
+    imageUrl: "", // For files selected from drive
   })
 
   // Get auth token
@@ -136,23 +164,115 @@ export function AdManagement({ onToast }: AdManagementProps) {
       enabled: true,
       imageFile: null,
       imagePreview: "",
+      imageUrl: "",
     })
   }
 
-  // Handle image file selection
+  // File picker functions
+  const loadFilePickerFiles = async (folderPath: string | null) => {
+    setFilePickerLoading(true)
+    try {
+      const token = getToken()
+      const url = folderPath
+        ? `${API_BASE}/api/files?folderPath=${encodeURIComponent(folderPath)}`
+        : `${API_BASE}/api/files`
+
+      const response = await fetch(url, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setFilePickerFiles(data.data?.files || [])
+        setFilePickerFolders(data.data?.folders || [])
+      }
+    } catch (error) {
+      console.error('Error loading files:', error)
+    }
+    setFilePickerLoading(false)
+  }
+
+  const openFilePicker = async () => {
+    setFilePickerPath([])
+    setShowFilePicker(true)
+    await loadFilePickerFiles(null)
+  }
+
+  const navigateFilePickerFolder = async (folder: DriveFolder | null) => {
+    if (!folder) {
+      setFilePickerPath([])
+      await loadFilePickerFiles(null)
+    } else {
+      // Update path
+      const pathIndex = filePickerPath.findIndex(f => f.path === folder.path)
+      if (pathIndex >= 0) {
+        setFilePickerPath(filePickerPath.slice(0, pathIndex + 1))
+      } else {
+        setFilePickerPath([...filePickerPath, folder])
+      }
+      await loadFilePickerFiles(folder.path)
+    }
+  }
+
+  const selectFileFromPicker = async (file: DriveFile) => {
+    try {
+      const token = getToken()
+
+      // Create share link for this file
+      const response = await fetch(`${API_BASE}/api/files/${encodeURIComponent(file.path)}/share`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ expiryHours: 0 }) // No expiry
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const shareToken = data.data?.shareToken || data.shareToken
+        const shareUrl = `${window.location.origin}/share/${shareToken}/raw`
+
+        setFormData(prev => ({
+          ...prev,
+          imageUrl: shareUrl,
+          imagePreview: shareUrl,
+          imageFile: null
+        }))
+        showToast('File selected from drive', 'success')
+      } else {
+        showToast('Failed to create share link', 'error')
+      }
+
+      setShowFilePicker(false)
+    } catch (error) {
+      console.error('Failed to select file:', error)
+      showToast('Failed to select file', 'error')
+    }
+  }
+
+  // Check if file is an allowed ad media type (video, gif, image)
+  const isAdMediaFile = (mimeType: string): boolean => {
+    return mimeType.startsWith('image/') ||
+           mimeType.startsWith('video/') ||
+           mimeType === 'image/gif'
+  }
+
+  // Handle image/video file selection
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      // Validate file type
-      const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+      // Validate file type (images and videos)
+      const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm"]
       if (!validTypes.includes(file.type)) {
-        showToast("Invalid file type. Use JPG, PNG, GIF, or WebP", "error")
+        showToast("Invalid file type. Use JPG, PNG, GIF, WebP, MP4 or WebM", "error")
         return
       }
 
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        showToast("File too large. Maximum size is 5MB", "error")
+      // Validate file size (max 100MB for videos, 5MB for images)
+      const maxSize = file.type.startsWith("video/") ? 100 * 1024 * 1024 : 5 * 1024 * 1024
+      if (file.size > maxSize) {
+        showToast(`File too large. Maximum size is ${file.type.startsWith("video/") ? "100MB" : "5MB"}`, "error")
         return
       }
 
@@ -163,6 +283,7 @@ export function AdManagement({ onToast }: AdManagementProps) {
           ...prev,
           imageFile: file,
           imagePreview: reader.result as string,
+          imageUrl: "", // Clear drive URL when uploading file
         }))
       }
       reader.readAsDataURL(file)
@@ -173,7 +294,7 @@ export function AdManagement({ onToast }: AdManagementProps) {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.title || !formData.targetUrl || !formData.imageFile) {
+    if (!formData.title || !formData.targetUrl || (!formData.imageFile && !formData.imageUrl)) {
       showToast("Please fill in all required fields", "error")
       return
     }
@@ -187,7 +308,11 @@ export function AdManagement({ onToast }: AdManagementProps) {
       data.append("targetUrl", formData.targetUrl)
       data.append("placement", formData.placement)
       data.append("enabled", formData.enabled.toString())
-      data.append("image", formData.imageFile)
+      if (formData.imageFile) {
+        data.append("image", formData.imageFile)
+      } else if (formData.imageUrl) {
+        data.append("imageUrl", formData.imageUrl)
+      }
 
       const response = await fetch(`${API_BASE}/api/ads`, {
         method: "POST",
@@ -235,6 +360,8 @@ export function AdManagement({ onToast }: AdManagementProps) {
       data.append("enabled", formData.enabled.toString())
       if (formData.imageFile) {
         data.append("image", formData.imageFile)
+      } else if (formData.imageUrl && formData.imageUrl !== editingAd.imageUrl) {
+        data.append("imageUrl", formData.imageUrl)
       }
 
       const response = await fetch(`${API_BASE}/api/ads/${editingAd.id}`, {
@@ -553,37 +680,55 @@ export function AdManagement({ onToast }: AdManagementProps) {
                 </select>
               </div>
 
-              {/* Image Upload */}
+              {/* Media Upload */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Ad Image *</label>
+                <label className="block text-sm font-medium text-foreground mb-2">Ad Media *</label>
                 <div className="border-2 border-dashed border-border rounded-lg p-4">
                   {formData.imagePreview ? (
                     <div className="relative">
-                      <img
-                        src={formData.imagePreview}
-                        alt="Preview"
-                        className="w-full h-40 object-cover rounded-lg"
-                      />
+                      {formData.imagePreview.includes('video') || formData.imageFile?.type?.startsWith('video/') ? (
+                        <video
+                          src={formData.imagePreview}
+                          className="w-full h-40 object-cover rounded-lg"
+                          controls
+                        />
+                      ) : (
+                        <img
+                          src={formData.imagePreview}
+                          alt="Preview"
+                          className="w-full h-40 object-cover rounded-lg"
+                        />
+                      )}
                       <button
                         type="button"
-                        onClick={() => setFormData((prev) => ({ ...prev, imageFile: null, imagePreview: "" }))}
+                        onClick={() => setFormData((prev) => ({ ...prev, imageFile: null, imagePreview: "", imageUrl: "" }))}
                         className="absolute top-2 right-2 p-1 bg-black/50 text-white rounded-full hover:bg-black/70"
                       >
                         <X className="w-4 h-4" />
                       </button>
                     </div>
                   ) : (
-                    <label className="flex flex-col items-center justify-center cursor-pointer py-4">
-                      <ImageIcon className="w-8 h-8 text-muted-foreground mb-2" />
-                      <span className="text-sm text-muted-foreground">Click to upload image</span>
-                      <span className="text-xs text-muted-foreground mt-1">JPG, PNG, GIF, WebP (max 5MB)</span>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/gif,image/webp"
-                        onChange={handleImageSelect}
-                        className="hidden"
-                      />
-                    </label>
+                    <div className="space-y-3">
+                      <label className="flex flex-col items-center justify-center cursor-pointer py-4 border-b border-border">
+                        <ImageIcon className="w-8 h-8 text-muted-foreground mb-2" />
+                        <span className="text-sm text-muted-foreground">Click to upload file</span>
+                        <span className="text-xs text-muted-foreground mt-1">JPG, PNG, GIF, WebP, MP4, WebM</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm"
+                          onChange={handleImageSelect}
+                          className="hidden"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={openFilePicker}
+                        className="w-full flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <FolderOpen className="w-4 h-4" />
+                        Or browse from Storage
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -688,41 +833,70 @@ export function AdManagement({ onToast }: AdManagementProps) {
                 </select>
               </div>
 
-              {/* Image Upload */}
+              {/* Media Upload */}
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Ad Image</label>
+                <label className="block text-sm font-medium text-foreground mb-2">Ad Media</label>
                 <div className="border-2 border-dashed border-border rounded-lg p-4">
                   {formData.imagePreview ? (
                     <div className="relative">
-                      <img
-                        src={formData.imagePreview}
-                        alt="Preview"
-                        className="w-full h-40 object-cover rounded-lg"
-                      />
-                      <label className="absolute bottom-2 right-2 px-2 py-1 bg-black/50 text-white text-xs rounded cursor-pointer hover:bg-black/70">
-                        Change Image
+                      {formData.imagePreview.includes('video') || formData.imageFile?.type?.startsWith('video/') ? (
+                        <video
+                          src={formData.imagePreview}
+                          className="w-full h-40 object-cover rounded-lg"
+                          controls
+                        />
+                      ) : (
+                        <img
+                          src={formData.imagePreview}
+                          alt="Preview"
+                          className="w-full h-40 object-cover rounded-lg"
+                        />
+                      )}
+                      <div className="absolute bottom-2 right-2 flex gap-1">
+                        <label className="px-2 py-1 bg-black/50 text-white text-xs rounded cursor-pointer hover:bg-black/70">
+                          Change
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm"
+                            onChange={handleImageSelect}
+                            className="hidden"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={openFilePicker}
+                          className="px-2 py-1 bg-black/50 text-white text-xs rounded hover:bg-black/70 flex items-center gap-1"
+                        >
+                          <FolderOpen className="w-3 h-3" />
+                          Storage
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <label className="flex flex-col items-center justify-center cursor-pointer py-4 border-b border-border">
+                        <ImageIcon className="w-8 h-8 text-muted-foreground mb-2" />
+                        <span className="text-sm text-muted-foreground">Click to upload file</span>
+                        <span className="text-xs text-muted-foreground mt-1">JPG, PNG, GIF, WebP, MP4, WebM</span>
                         <input
                           type="file"
-                          accept="image/jpeg,image/png,image/gif,image/webp"
+                          accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm"
                           onChange={handleImageSelect}
                           className="hidden"
                         />
                       </label>
+                      <button
+                        type="button"
+                        onClick={openFilePicker}
+                        className="w-full flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <FolderOpen className="w-4 h-4" />
+                        Or browse from Storage
+                      </button>
                     </div>
-                  ) : (
-                    <label className="flex flex-col items-center justify-center cursor-pointer py-4">
-                      <ImageIcon className="w-8 h-8 text-muted-foreground mb-2" />
-                      <span className="text-sm text-muted-foreground">Click to upload image</span>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/gif,image/webp"
-                        onChange={handleImageSelect}
-                        className="hidden"
-                      />
-                    </label>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">Leave empty to keep current image</p>
+                <p className="text-xs text-muted-foreground mt-1">Leave empty to keep current media</p>
               </div>
 
               {/* Enabled Toggle */}
@@ -761,6 +935,108 @@ export function AdManagement({ onToast }: AdManagementProps) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* File Picker Modal */}
+      {showFilePicker && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4">
+          <div className="bg-card rounded-lg p-6 max-w-2xl w-full space-y-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-foreground">
+                Select Media from Storage
+              </h3>
+              <button onClick={() => setShowFilePicker(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Breadcrumb */}
+            <div className="flex items-center gap-1 text-sm text-muted-foreground overflow-x-auto pb-2">
+              <button
+                onClick={() => navigateFilePickerFolder(null)}
+                className="hover:text-foreground flex items-center gap-1"
+              >
+                <Home className="w-4 h-4" />
+                Root
+              </button>
+              {filePickerPath.map((folder) => (
+                <div key={folder.path} className="flex items-center gap-1">
+                  <ChevronRight className="w-4 h-4" />
+                  <button
+                    onClick={() => navigateFilePickerFolder(folder)}
+                    className="hover:text-foreground"
+                  >
+                    {folder.name}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* File list */}
+            <div className="flex-1 overflow-y-auto border border-border rounded-lg">
+              {filePickerLoading ? (
+                <div className="flex items-center justify-center h-40">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {/* Folders */}
+                  {filePickerFolders.map((folder) => (
+                    <button
+                      key={`folder-${folder.path}`}
+                      onClick={() => navigateFilePickerFolder(folder)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-secondary transition-colors text-left"
+                    >
+                      <FolderOpen className="w-5 h-5 text-accent" />
+                      <span className="text-foreground font-medium">{folder.name}</span>
+                    </button>
+                  ))}
+
+                  {/* Files - filtered by media type */}
+                  {filePickerFiles
+                    .filter((file) => isAdMediaFile(file.mimeType))
+                    .map((file) => (
+                      <button
+                        key={`file-${file.path}`}
+                        onClick={() => selectFileFromPicker(file)}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-secondary transition-colors text-left"
+                      >
+                        {file.mimeType.startsWith('video/') ? (
+                          <VideoIcon className="w-5 h-5 text-blue-400" />
+                        ) : (
+                          <File className="w-5 h-5 text-green-400" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-foreground font-medium truncate">{file.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {file.formattedSize} • {file.mimeType}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+
+                  {/* Empty state */}
+                  {filePickerFolders.length === 0 &&
+                   filePickerFiles.filter((f) => isAdMediaFile(f.mimeType)).length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground">
+                      <p>No media files found in this folder</p>
+                      <p className="text-sm mt-1">Images, GIFs, and videos are supported</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowFilePicker(false)}
+                className="px-4 py-2 bg-secondary text-foreground rounded-lg hover:opacity-90 transition-opacity"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

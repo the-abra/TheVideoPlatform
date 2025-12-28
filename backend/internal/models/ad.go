@@ -11,6 +11,7 @@ const (
 	PlacementHomeSidebar  = "home-sidebar"
 	PlacementVideoTop     = "video-top"
 	PlacementVideoSidebar = "video-sidebar"
+	PlacementVideoRandom  = "video-random" // Random placement between videos
 )
 
 // ValidPlacements is a map of valid ad placement values
@@ -19,6 +20,7 @@ var ValidPlacements = map[string]bool{
 	PlacementHomeSidebar:  true,
 	PlacementVideoTop:     true,
 	PlacementVideoSidebar: true,
+	PlacementVideoRandom:  true,
 }
 
 // Ad represents an advertisement in the system
