@@ -23,9 +23,29 @@ func NewFileService(storagePath string) *FileService {
 }
 
 func (s *FileService) SaveFile(file multipart.File, header *multipart.FileHeader) (string, string, error) {
-	// Generate unique filename
+	// Get the original filename without extension
 	ext := filepath.Ext(header.Filename)
-	uniqueName := fmt.Sprintf("%s%s", uuid.New().String(), ext)
+	originalName := strings.TrimSuffix(header.Filename, ext)
+
+	// Sanitize the filename (remove special characters, spaces, etc.)
+	sanitizedName := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			return r
+		}
+		if r == ' ' {
+			return '_'
+		}
+		return -1
+	}, originalName)
+
+	// If sanitization removed all characters, use a default name
+	if sanitizedName == "" {
+		sanitizedName = "file"
+	}
+
+	// Generate unique filename with original name: originalname_uuid.ext
+	uniqueID := uuid.New().String()[:8] // Use first 8 chars of UUID for brevity
+	uniqueName := fmt.Sprintf("%s_%s%s", sanitizedName, uniqueID, ext)
 
 	// Create file path
 	filePath := filepath.Join(s.storagePath, uniqueName)
@@ -173,9 +193,29 @@ func (s *FileService) GetStoragePath() string {
 
 // SaveFileToPath saves a file to a specific path within the storage directory
 func (s *FileService) SaveFileToPath(file multipart.File, header *multipart.FileHeader, folderPath string) (string, string, error) {
-	// Generate unique filename
+	// Get the original filename without extension
 	ext := filepath.Ext(header.Filename)
-	uniqueName := fmt.Sprintf("%s%s", uuid.New().String(), ext)
+	originalName := strings.TrimSuffix(header.Filename, ext)
+
+	// Sanitize the filename (remove special characters, spaces, etc.)
+	sanitizedName := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			return r
+		}
+		if r == ' ' {
+			return '_'
+		}
+		return -1
+	}, originalName)
+
+	// If sanitization removed all characters, use a default name
+	if sanitizedName == "" {
+		sanitizedName = "file"
+	}
+
+	// Generate unique filename with original name: originalname_uuid.ext
+	uniqueID := uuid.New().String()[:8] // Use first 8 chars of UUID for brevity
+	uniqueName := fmt.Sprintf("%s_%s%s", sanitizedName, uniqueID, ext)
 
 	var targetPath string
 	if folderPath != "" && folderPath != "." {

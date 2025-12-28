@@ -187,15 +187,15 @@ export function SiteProtection() {
     const runDetections = async () => {
       const newWarnings: Warning[] = []
 
-      // Check for ad blocker
-      const hasAdBlocker = await detectAdBlocker()
-      if (hasAdBlocker) {
-        newWarnings.push({
-          type: "adblock",
-          title: "Ad Blocker Detected",
-          message: "Please disable your ad blocker to support this site. Ads help us keep the content free.",
-        })
-      }
+      // Ad blocker detection disabled
+      // const hasAdBlocker = await detectAdBlocker()
+      // if (hasAdBlocker) {
+      //   newWarnings.push({
+      //     type: "adblock",
+      //     title: "Ad Blocker Detected",
+      //     message: "Please disable your ad blocker to support this site. Ads help us keep the content free.",
+      //   })
+      // }
 
       // Check for Wappalyzer
       const hasWappalyzer = await detectWappalyzer()
@@ -207,15 +207,15 @@ export function SiteProtection() {
         })
       }
 
-      // Check for VPN
-      const hasVPN = await detectVPN()
-      if (hasVPN) {
-        newWarnings.push({
-          type: "vpn",
-          title: "VPN/Proxy Detected",
-          message: "You appear to be using a VPN or proxy. Some features may be restricted.",
-        })
-      }
+      // VPN detection disabled
+      // const hasVPN = await detectVPN()
+      // if (hasVPN) {
+      //   newWarnings.push({
+      //     type: "vpn",
+      //     title: "VPN/Proxy Detected",
+      //     message: "You appear to be using a VPN or proxy. Some features may be restricted.",
+      //   })
+      // }
 
       setWarnings(newWarnings)
     }

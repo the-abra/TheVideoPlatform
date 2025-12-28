@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -17,26 +16,15 @@ import (
 	"titan-backend/internal/services"
 )
 
-// ShareInfo stores information about shared files
-type ShareInfo struct {
-	FileName    string     `json:"fileName"`
-	Expiry      *time.Time `json:"expiry"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	Downloads   int        `json:"downloads"`
-}
-
 type FileHandler struct {
 	fileRepo    *models.FileRepository
 	fileService *services.FileService
-	shareTokens map[string]*ShareInfo // In-memory store for share tokens
-	shareMutex  sync.RWMutex          // Mutex to protect the shareTokens map
 }
 
 func NewFileHandler(fileRepo *models.FileRepository, fileService *services.FileService) *FileHandler {
 	return &FileHandler{
 		fileRepo:    fileRepo,
 		fileService: fileService,
-		shareTokens: make(map[string]*ShareInfo),
 	}
 }
 
@@ -323,15 +311,11 @@ func (h *FileHandler) CreateShareLink(w http.ResponseWriter, r *http.Request) {
 		expiry = &exp
 	}
 
-	// Store share info in memory
-	h.shareMutex.Lock()
-	h.shareTokens[token] = &ShareInfo{
-		FileName:  filename,
-		Expiry:    expiry,
-		CreatedAt: time.Now(),
-		Downloads: 0,
+	// Store share info in database
+	if err := h.fileRepo.CreateFileShare(token, filename, expiry, nil); err != nil {
+		models.RespondError(w, "Failed to create share link", http.StatusInternalServerError)
+		return
 	}
-	h.shareMutex.Unlock()
 
 	models.RespondSuccess(w, "Share link created", map[string]interface{}{
 		"fileName":   filename,
@@ -357,35 +341,38 @@ func (h *FileHandler) DownloadShared(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.shareMutex.RLock()
-	shareInfo, exists := h.shareTokens[token]
-	h.shareMutex.RUnlock()
-
-	if !exists {
+	// Get share info from database
+	shareInfo, filename, err := h.fileRepo.GetFileShareByToken(token)
+	if err != nil {
 		models.RespondError(w, "Shared file not found", http.StatusNotFound)
 		return
 	}
 
 	// Check expiry
-	if shareInfo.Expiry != nil && time.Now().After(*shareInfo.Expiry) {
+	if shareInfo.ExpiresAt != nil && time.Now().After(*shareInfo.ExpiresAt) {
 		models.RespondError(w, "Share link has expired", http.StatusGone)
 		return
 	}
 
+	// Check max downloads limit
+	if shareInfo.MaxDownloads != nil && shareInfo.Downloads >= *shareInfo.MaxDownloads {
+		models.RespondError(w, "Download limit reached", http.StatusForbidden)
+		return
+	}
+
 	// Check if file exists on disk
-	if !h.fileService.FileExists(shareInfo.FileName) {
+	if !h.fileService.FileExists(filename) {
 		models.RespondError(w, "File not found", http.StatusNotFound)
 		return
 	}
 
-	// Increment download count
-	h.shareMutex.Lock()
-	shareInfo.Downloads++
-	h.shareTokens[token] = shareInfo
-	h.shareMutex.Unlock()
+	// Increment download count in database
+	if err := h.fileRepo.IncrementShareDownloads(token); err != nil {
+		log.Printf("Failed to increment share download count: %v", err)
+	}
 
 	// Serve file
-	filePath := h.fileService.GetFilePath(shareInfo.FileName)
+	filePath := h.fileService.GetFilePath(filename)
 	info, err := os.Stat(filePath)
 	if err != nil {
 		models.RespondError(w, "File not found", http.StatusNotFound)
@@ -393,7 +380,7 @@ func (h *FileHandler) DownloadShared(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+info.Name()+"\"")
-	mimeType := h.fileService.GetMimeType(shareInfo.FileName)
+	mimeType := h.fileService.GetMimeType(filename)
 	w.Header().Set("Content-Type", mimeType)
 	http.ServeFile(w, r, filePath)
 }
@@ -406,23 +393,21 @@ func (h *FileHandler) GetSharedInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.shareMutex.RLock()
-	shareInfo, exists := h.shareTokens[token]
-	h.shareMutex.RUnlock()
-
-	if !exists {
+	// Get share info from database
+	shareInfo, filename, err := h.fileRepo.GetFileShareByToken(token)
+	if err != nil {
 		models.RespondError(w, "Shared file not found", http.StatusNotFound)
 		return
 	}
 
 	// Check expiry
-	if shareInfo.Expiry != nil && time.Now().After(*shareInfo.Expiry) {
+	if shareInfo.ExpiresAt != nil && time.Now().After(*shareInfo.ExpiresAt) {
 		models.RespondError(w, "Share link has expired", http.StatusGone)
 		return
 	}
 
 	// Get file info from the file system
-	filePath := h.fileService.GetFilePath(shareInfo.FileName)
+	filePath := h.fileService.GetFilePath(filename)
 	info, err := os.Stat(filePath)
 	if err != nil {
 		models.RespondError(w, "File not found", http.StatusNotFound)
@@ -433,7 +418,7 @@ func (h *FileHandler) GetSharedInfo(w http.ResponseWriter, r *http.Request) {
 	models.RespondSuccess(w, "", map[string]interface{}{
 		"name":      info.Name(),
 		"size":      info.Size(),
-		"mimeType":  h.fileService.GetMimeType(shareInfo.FileName),
+		"mimeType":  h.fileService.GetMimeType(filename),
 		"downloads": shareInfo.Downloads,
 	}, http.StatusOK)
 }
@@ -881,14 +866,11 @@ func (h *FileHandler) createShareLinkWithPath(w http.ResponseWriter, r *http.Req
 		expiry = &exp
 	}
 
-	h.shareMutex.Lock()
-	h.shareTokens[token] = &ShareInfo{
-		FileName:  filename,
-		Expiry:    expiry,
-		CreatedAt: time.Now(),
-		Downloads: 0,
+	// Store share info in database
+	if err := h.fileRepo.CreateFileShare(token, filename, expiry, nil); err != nil {
+		models.RespondError(w, "Failed to create share link", http.StatusInternalServerError)
+		return
 	}
-	h.shareMutex.Unlock()
 
 	models.RespondSuccess(w, "Share link created", map[string]interface{}{
 		"fileName":   filename,

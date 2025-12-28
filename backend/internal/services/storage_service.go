@@ -58,8 +58,27 @@ func (s *StorageService) saveFile(file multipart.File, header *multipart.FileHea
 		return "", fmt.Errorf("invalid file type: %s", ext)
 	}
 
-	// Generate unique filename
-	filename := uuid.New().String() + ext
+	// Get the original filename without extension
+	originalName := strings.TrimSuffix(header.Filename, filepath.Ext(header.Filename))
+	// Sanitize the filename (remove special characters, spaces, etc.)
+	sanitizedName := strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			return r
+		}
+		if r == ' ' {
+			return '_'
+		}
+		return -1
+	}, originalName)
+
+	// If sanitization removed all characters, use a default name
+	if sanitizedName == "" {
+		sanitizedName = "video"
+	}
+
+	// Generate unique filename with original name: originalname_uuid.ext
+	uniqueID := uuid.New().String()[:8] // Use first 8 chars of UUID for brevity
+	filename := fmt.Sprintf("%s_%s%s", sanitizedName, uniqueID, ext)
 	filePath := filepath.Join(basePath, filename)
 
 	// Create destination file
