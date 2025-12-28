@@ -17,11 +17,11 @@ import (
 
 // DirectoryHandler handles directory/folder operations
 type DirectoryHandler struct {
-	fileService *services.FileService
+	fileService services.FileServiceInterface
 }
 
 // NewDirectoryHandler creates a new directory handler
-func NewDirectoryHandler(fileService *services.FileService) *DirectoryHandler {
+func NewDirectoryHandler(fileService services.FileServiceInterface) *DirectoryHandler {
 	return &DirectoryHandler{
 		fileService: fileService,
 	}

@@ -20,12 +20,12 @@ import (
 // FileOperations handles core file management operations
 type FileOperations struct {
 	fileRepo     *models.FileRepository
-	fileService  *services.FileService
+	fileService  services.FileServiceInterface
 	shareHandler *ShareHandler
 }
 
 // NewFileOperations creates a new file operations handler
-func NewFileOperations(fileRepo *models.FileRepository, fileService *services.FileService) *FileOperations {
+func NewFileOperations(fileRepo *models.FileRepository, fileService services.FileServiceInterface) *FileOperations {
 	return &FileOperations{
 		fileRepo:     fileRepo,
 		fileService:  fileService,

@@ -16,11 +16,11 @@ import (
 // ShareHandler handles file sharing operations
 type ShareHandler struct {
 	fileRepo    *models.FileRepository
-	fileService *services.FileService
+	fileService services.FileServiceInterface
 }
 
 // NewShareHandler creates a new share handler
-func NewShareHandler(fileRepo *models.FileRepository, fileService *services.FileService) *ShareHandler {
+func NewShareHandler(fileRepo *models.FileRepository, fileService services.FileServiceInterface) *ShareHandler {
 	return &ShareHandler{
 		fileRepo:    fileRepo,
 		fileService: fileService,
