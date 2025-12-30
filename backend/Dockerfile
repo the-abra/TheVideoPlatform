@@ -1,5 +1,5 @@
 # Multi-stage build for smaller final image
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git gcc musl-dev
@@ -8,6 +8,8 @@ WORKDIR /app
 
 # Copy go mod files first for better caching
 COPY go.mod go.sum ./
+# Enable auto toolchain download for dependencies requiring newer Go versions
+ENV GOTOOLCHAIN=auto
 RUN go mod download
 
 # Copy source code

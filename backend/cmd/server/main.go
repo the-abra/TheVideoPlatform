@@ -112,6 +112,7 @@ func main() {
 				// Allow localhost and local IPs
 				if strings.HasPrefix(origin, "http://localhost:") ||
 					strings.HasPrefix(origin, "http://127.0.0.1:") ||
+					strings.HasPrefix(origin, "http://0.0.0.0:") ||
 					strings.HasPrefix(origin, "http://10.") ||
 					strings.HasPrefix(origin, "http://192.168.") ||
 					strings.HasPrefix(origin, "http://172.") {
